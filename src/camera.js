@@ -24,8 +24,9 @@ function applyShake(dt) {
 
 function titleCamera() {
   const a = world.time * 0.1;
-  camPos.set(Math.sin(a) * 30, 16, Math.cos(a) * 30 + 6);
-  camLook.set(0, 4.5, 3);
+  // circle inside the park (downtown towers stand all around it)
+  camPos.set(Math.sin(a) * 15, 7.5, Math.cos(a) * 15 + 3);
+  camLook.set(0, 4.5, 2);
   camera.position.copy(camPos);
   camera.lookAt(camLook);
 }
@@ -39,13 +40,30 @@ function firstPersonCamera(dt) {
   camPos.copy(camera.position);
 }
 
+const CHASE = { car: [9, 3.8, 1.6], tank: [13, 6, 2.5], jet: [24, 6.5, 2] }; // back, up, look height
+
+function vehicleCamera(dt) {
+  const v = P.vehicle;
+  P.lookT = Math.max(0, (P.lookT || 0) - dt);
+  if (P.lookT <= 0 && v.type !== 'tank') P.yaw = turnToward(P.yaw, v.yaw, dt * 2.5);
+  const [back, up, lookUp] = CHASE[v.type];
+  const fwd = new V3(Math.sin(P.yaw), 0, Math.cos(P.yaw));
+  const want = v.pos.clone().addScaledVector(fwd, -back).setY(v.alt + up - P.pitch * 4);
+  camPos.lerp(want, Math.min(1, dt * 7));
+  const look = v.pos.clone().addScaledVector(fwd, 10).setY(v.alt + lookUp + P.pitch * 8);
+  camLook.lerp(look, Math.min(1, dt * 10));
+  camera.position.copy(camPos);
+  camera.lookAt(camLook);
+}
+
 function outsideCamera(dt) {
+  if (P.vehicle) return vehicleCamera(dt);
   const bossOn = world.state === 'boss' || world.state === 'bossIntro';
   const fwd = new V3(Math.sin(P.yaw), 0, Math.cos(P.yaw)), right = new V3(-Math.cos(P.yaw), 0, Math.sin(P.yaw));
   const back = P.kong ? 21 : bossOn ? 8.5 : 6.2;
   const up = P.kong ? 13 : bossOn ? 4.6 : 3.3;
   const shoulder = P.kong ? 0 : 1.0;
-  const want = P.pos.clone().addScaledVector(fwd, -back).addScaledVector(right, shoulder).setY(up - P.pitch * (P.kong ? 8 : 3));
+  const want = P.pos.clone().addScaledVector(fwd, -back).addScaledVector(right, shoulder).setY(P.y + up - P.pitch * (P.kong ? 8 : 3));
   camPos.lerp(want, Math.min(1, dt * 9));
   const look = P.pos.clone().addScaledVector(fwd, P.kong ? 10 : 7).addScaledVector(right, shoulder * 0.6)
     .setY((P.kong ? 7 : 1.9) + P.y + P.pitch * (P.kong ? 14 : 7));

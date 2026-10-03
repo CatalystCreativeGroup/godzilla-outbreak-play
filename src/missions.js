@@ -1,163 +1,228 @@
-// City missions: monster camps hold people in cages. Beat the guards, free the people (they join the army),
-// and when every camp is free the city's Godzilla boss shows up.
+// Level missions (rescue, nests, rooftop, airstrike, tank, collect). When the goal is done, the level's boss lands.
 import * as THREE from 'three';
 import { scene } from './engine.js';
-import { CITIES } from './settings.js';
+import { GAME } from './settings.js';
+import { MISSION_TEXT } from './levels.js';
 import { spawnEnemy, spawnRoamer } from './enemies.js';
 import { disposeModel, disposeGroup } from './models.js';
 import { spawnHostage, updateHostages, recruit } from './allies.js';
 import { dropLoot } from './loot.js';
 import { addPower } from './hero.js';
 import { bossArrives } from './boss.js';
+import { spawnNest, clearNests } from './nests.js';
+import { buildCage, beacon, CAGE } from './camps.js';
+import { placeCrate } from './crates.js';
+import { DISTRICTS, buildings, openSpotNear, roadPointIn } from './map.js';
 import { sfx, say } from './audio.js';
 import { sparks, smoke, popWord } from './fx.js';
-import { tex } from './textures.js';
-import { GAME } from './settings.js';
 import { V3, rnd, pick, world, P, loadout, flatDist } from './world.js';
 
-const barMat = new THREE.MeshStandardMaterial({ color: 0x5b6066, roughness: 0.35, metalness: 0.9 });
-const barrierMat = new THREE.MeshStandardMaterial({ map: tex('sidewalk'), color: 0xa9a49a, roughness: 0.9 });
-const sandMat = new THREE.MeshStandardMaterial({ color: 0x6b5d45, roughness: 1 });
-const lampMat = new THREE.MeshStandardMaterial({ color: 0x330000, emissive: 0xff2a1a, emissiveIntensity: 2 });
-const beamMat = new THREE.MeshBasicMaterial({ color: 0xffd866, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
+let mission = null; // { type, total, done, items: [...], stage }
+let roamerT = 6, introT = 0;
+const markers = [];
 
-const CAGE = 3.6; // half-size of the cage
+/* Spread-out open spots inside a district. */
+function spotsIn(districtId, n, minGap = 45, clearance = 8) {
+  const d = DISTRICTS[districtId];
+  const spots = [];
+  for (let tries = 0; spots.length < n && tries < 400; tries++) {
+    const p = openSpotNear(rnd(d.x0 + 20, d.x1 - 20), rnd(d.z0 + 20, d.z1 - 20), 10, clearance);
+    if (Math.hypot(p.x - DISTRICTS[districtId].arena[0], p.z - DISTRICTS[districtId].arena[1]) < 15) continue;
+    if (spots.every(s => s.distanceTo(p) > minGap - tries * 0.08)) spots.push(p);
+  }
+  return spots;
+}
 
-function buildCage(center) {
-  const g = new THREE.Group();
-  g.position.copy(center);
-  const barGeo = new THREE.CylinderGeometry(0.07, 0.07, 3.4, 6);
-  barGeo.translate(0, 1.7, 0);
-  const sides = [];
-  for (let side = 0; side < 4; side++) {
-    const wall = new THREE.Group();
-    for (let i = -6; i <= 6; i++) {
-      const b = new THREE.Mesh(barGeo, barMat);
-      b.position.set(i * (CAGE / 6), 0, 0); b.castShadow = true;
-      wall.add(b);
+function guards(center, count, types, radius = 10) {
+  const list = [];
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2 + rnd(-0.2, 0.2);
+    const type = i === 0 && types.includes('brute') ? 'brute' : pick(types.filter(t => t !== 'bomber')) || 'lizard';
+    list.push(spawnEnemy(type, new V3(center.x + Math.cos(a) * rnd(radius * 0.8, radius * 1.1), 0, center.z + Math.sin(a) * rnd(radius * 0.8, radius * 1.1)), center));
+  }
+  return list;
+}
+const guardCount = i => Math.round((3 + i * 0.7) * (1 + world.levelIndex * 0.08) * GAME.difficulty);
+
+/* ---------- set up each mission type ---------- */
+const SETUP = {
+  rescue(level) {
+    return spotsIn(level.district, level.mission.count).map((c, i) => {
+      const cage = buildCage(c);
+      const people = 2 + (i % 2) + Math.floor(world.levelIndex / 8);
+      const hostages = [];
+      for (let k = 0; k < people; k++) {
+        const a = (k / people) * Math.PI * 2;
+        hostages.push(spawnHostage(new V3(c.x + Math.cos(a) * 1.4, 0.2, c.z + Math.sin(a) * 1.4)));
+      }
+      for (let k = 0; k < 3; k++) placeCrate(k ? 'wood' : 'ammo', new V3(c.x + rnd(-9, 9), 0, c.z + (k % 2 ? 9 : -9)));
+      return { kind: 'camp', pos: c, cage, hostages, guards: guards(c, guardCount(i), level.monsters), state: 'guarded', openT: 0, done: false };
+    });
+  },
+  nests(level) {
+    return spotsIn(level.district, level.mission.count).map(c => {
+      const nest = spawnNest(c, { types: level.monsters.filter(t => t !== 'brute').concat(['lizard']), spawnEvery: Math.max(4, 8 - world.levelIndex * 0.2) });
+      guards(c, 2, level.monsters, 8);
+      return { kind: 'nest', pos: c, nest, done: false };
+    });
+  },
+  rooftop(level) {
+    const d = DISTRICTS[level.district];
+    const roofs = buildings.filter(b => b.ladder && b.alive && b.cx > d.x0 && b.cx < d.x1 && b.cz > d.z0 && b.cz < d.z1)
+      .sort(() => Math.random() - 0.5).slice(0, level.mission.count);
+    return roofs.map(b => {
+      const pos = new V3(b.cx, b.h, b.cz);
+      const hostage = spawnHostage(pos);
+      for (let k = 0; k < 2; k++) placeCrate('wood', new V3(b.cx + rnd(-b.hw + 1, b.hw - 1), b.h, b.cz + rnd(-b.hd + 1, b.hd - 1)));
+      guards(new V3(b.ladder.x, 0, b.ladder.z), 3, level.monsters, 6);
+      return { kind: 'roof', pos, building: b, hostage, beam: beacon(pos), done: false };
+    });
+  },
+  airstrike(level) {
+    return spotsIn('volcano', level.mission.count, 60, 14).map(c => ({ kind: 'base', pos: c, nest: spawnNest(c, { big: true }), done: false }));
+  },
+  tank(level) {
+    const d = DISTRICTS[level.district];
+    const groupAt = new V3(d.arena[0] + rnd(-30, 30), 0, d.arena[1] + rnd(-30, 30));
+    const items = [];
+    for (let i = 0; i < level.mission.count; i++) {
+      const p = openSpotNear(groupAt.x, groupAt.z, 40, 3);
+      const e = spawnEnemy('brute', p, groupAt);
+      e.missionTarget = true;
+      items.push({ kind: 'brute', pos: e.pos, enemy: e, done: false });
     }
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(CAGE * 2, 0.14, 0.14), barMat);
-    rail.position.y = 3.4; wall.add(rail);
-    const a = side * Math.PI / 2;
-    wall.position.set(Math.sin(a) * CAGE, 0, Math.cos(a) * CAGE);
-    wall.rotation.y = a;
-    g.add(wall);
-    sides.push(wall);
-  }
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(CAGE * 2, 0.2, CAGE * 2), new THREE.MeshStandardMaterial({ color: 0x4a4d50, roughness: 0.6, metalness: 0.6 }));
-  floor.position.y = 0.1; floor.receiveShadow = true; g.add(floor);
-  // concrete barriers and sandbags around the camp
-  for (let i = 0; i < 10; i++) {
-    const a = (i / 10) * Math.PI * 2 + rnd(-0.1, 0.1), r = rnd(6.5, 7.2);
-    const block = Math.random() < 0.5
-      ? new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.1, 0.7), barrierMat)
-      : new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 1.4, 3, 8).rotateZ(Math.PI / 2), sandMat);
-    block.position.set(Math.cos(a) * r, 0.5, Math.sin(a) * r);
-    block.rotation.y = -a + Math.PI / 2;
-    block.castShadow = block.receiveShadow = true;
-    g.add(block);
-  }
-  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), lampMat);
-  lamp.position.set(CAGE, 3.6, CAGE); g.add(lamp);
-  // the light beam starts above the people's heads so they stay easy to see
-  const beam = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 64, 20, 1, true), beamMat);
-  beam.position.y = 5 + 32; g.add(beam);
-  scene.add(g);
-  return { g, sides, beam, lamp };
+    return items;
+  },
+  collect(level) {
+    return spotsIn(level.district, level.mission.count, 35).map(c => {
+      const part = makePart(c);
+      guards(c, 3, level.monsters, 7);
+      return { kind: 'part', pos: c, part, done: false };
+    });
+  },
+};
+
+/* Glowing weapon part to pick up (collect missions). */
+const partGeo = new THREE.TorusGeometry(0.6, 0.22, 10, 18);
+const partMat = new THREE.MeshStandardMaterial({ color: 0x8a6a1a, emissive: 0xffb800, emissiveIntensity: 1.2, metalness: 0.9, roughness: 0.3 });
+function makePart(pos) {
+  const m = new THREE.Mesh(partGeo, partMat);
+  m.position.copy(pos).setY(1.3);
+  m.castShadow = true;
+  scene.add(m);
+  markers.push(m, beacon(pos, 0xffb800));
+  return m;
 }
 
-function createCamp(center, spec, types) {
-  const cage = buildCage(center);
-  const hostages = [];
-  for (let i = 0; i < spec.people; i++) {
-    const a = (i / spec.people) * Math.PI * 2;
-    hostages.push(spawnHostage(new V3(center.x + Math.cos(a) * 1.4, 0.2, center.z + Math.sin(a) * 1.4)));
-  }
-  const guards = [];
-  for (let i = 0; i < spec.guards; i++) {
-    const a = (i / spec.guards) * Math.PI * 2 + rnd(-0.2, 0.2);
-    const type = i === 0 && types.includes('brute') ? 'brute' : pick(types);
-    guards.push(spawnEnemy(type, new V3(center.x + Math.cos(a) * rnd(8.5, 11), 0, center.z + Math.sin(a) * rnd(8.5, 11)), center));
-  }
-  return { center: center.clone(), cage, hostages, guards, state: 'guarded', openT: 0 };
-}
-
-export function clearCamps() {
-  for (const c of world.camps) {
-    disposeGroup(c.cage.g);
-    for (const h of c.hostages) disposeModel(h.model);
-  }
-  world.camps = [];
-}
-
-export function setupMissions(cityIndex, campSites) {
-  const city = CITIES[cityIndex];
-  clearCamps();
-  world.camps = campSites.map((site, i) => createCamp(site, city.camps[i], city.monsterTypes));
-  world.campsFreed = 0;
-  for (let i = 0; i < city.roamers; i++) spawnRoamer(city.monsterTypes);
+export function setupMission(level) {
+  clearMission();
+  const items = SETUP[level.mission.type](level);
+  mission = { type: level.mission.type, level, items, total: items.length, stage: 'go' };
+  for (let i = 0; i < level.roamers; i++) spawnRoamer(level.monsters, level.district);
   roamerT = 6;
 }
 
-let roamerT = 6;
-
-function openCage(camp) {
-  camp.state = 'open';
-  camp.openT = 0;
-  sfx.cage();
-  world.banner?.('Guards beaten!<small>Free the people!</small>', 2400);
-  say('Free the people!');
+export function clearMission() {
+  if (mission) for (const it of mission.items) {
+    if (it.cage) disposeGroup(it.cage.g);
+    for (const h of it.hostages || []) disposeModel(h.model);
+    if (it.hostage && !it.done) disposeModel(it.hostage.model);
+    if (it.beam) scene.remove(it.beam);
+    if (it.part) scene.remove(it.part);
+  }
+  for (const m of markers) scene.remove(m);
+  markers.length = 0;
+  clearNests();
+  mission = null;
 }
 
-function freeCamp(camp) {
-  camp.state = 'freed';
-  camp.cage.beam.visible = false;
-  camp.cage.lamp.material = new THREE.MeshStandardMaterial({ color: 0x003300, emissive: 0x2aff4a, emissiveIntensity: 2 });
-  let joined = 0;
-  for (const h of camp.hostages) { if (recruit(h)) joined++; addPower(GAME.power.perPerson); }
-  camp.hostages = [];
-  world.campsFreed++;
+/* ---------- progress ---------- */
+function complete(it, text) {
+  if (it.done) return;
+  it.done = true;
+  const left = mission.items.filter(x => !x.done).length;
   sfx.save();
-  sparks(camp.center.clone().setY(2), 0xffe066, 24, 8, 0.5);
-  // every camp gives a reward crate; the city's new guns come from camps first
-  const unlockable = (world.city.unlocks || []).filter(w => !loadout.owned.includes(w) && !world.pickups.some(p => p.weaponId === w));
-  if (unlockable.length) dropLoot(camp.center.clone().add(new V3(0, 0, CAGE + 1.5)), 'weapon', unlockable[0]);
-  else dropLoot(camp.center.clone().add(new V3(0, 0, CAGE + 1.5)), Math.random() < 0.5 ? 'power' : 'rate');
-  const left = world.camps.length - world.campsFreed;
   if (left > 0) {
-    world.banner?.(`${joined ? joined + ' joined your army!' : 'People saved!'}<small>${left} camp${left > 1 ? 's' : ''} to go</small>`, 2600);
-    say(joined ? `${joined} joined your army!` : 'People saved!');
+    world.banner?.(`${text}<small>${left} to go</small>`, 2400);
+    say(`${text}. ${left} to go!`);
   }
 }
+
+function freeCamp(it) {
+  it.state = 'freed';
+  it.cage.beam.visible = false;
+  let joined = 0;
+  for (const h of it.hostages) { if (recruit(h)) joined++; addPower(GAME.power.perPerson); }
+  it.hostages = [];
+  sparks(it.pos.clone().setY(2), 0xffe066, 24, 8, 0.5);
+  rewardCrate(it.pos.clone().add(new V3(0, 0, CAGE + 1.5)));
+  complete(it, joined ? `${joined} joined your army!` : 'People saved!');
+}
+
+/* Each finished goal leaves a reward; the level's new gun comes first. */
+function rewardCrate(pos) {
+  const unlockable = (mission.level.unlocks || []).filter(w => !loadout.owned.includes(w) && !world.pickups.some(p => p.weaponId === w));
+  if (unlockable.length) dropLoot(pos, 'weapon', unlockable[0]);
+  else dropLoot(pos, pick(['power', 'rate', 'auto', 'soldier1', 'armor']));
+}
+
+const UPDATE = {
+  camp(it, dt) {
+    updateHostages(it.hostages, dt);
+    if (it.state === 'guarded') {
+      it.cage.lamp.material.emissiveIntensity = 1.5 + Math.sin(world.time * 8);
+      if (it.guards.every(g => !g.alive)) { it.state = 'open'; sfx.cage(); world.banner?.('Guards beaten!<small>Free the people!</small>', 2400); say('Free the people!'); }
+    } else if (it.state === 'open') {
+      it.openT = Math.min(1, it.openT + dt * 1.5);
+      it.cage.sides[0].rotation.x = -it.openT * Math.PI / 2 * 0.95;
+      if (flatDist(it.pos, P.pos) < CAGE + (P.kong ? 4 : 1.5) && !P.vehicle) freeCamp(it);
+    }
+  },
+  nest(it) { if (!it.nest.alive) { rewardCrate(it.pos); complete(it, 'Nest destroyed!'); } },
+  base(it) { if (!it.nest.alive) complete(it, 'Monster base destroyed!'); },
+  roof(it, dt) {
+    updateHostages([it.hostage], dt);
+    if (!it.building.alive && it.pos.y > 0) {
+      // the building fell down: the person climbs down to the street and waits there
+      it.pos.y = 0; it.hostage.pos.y = 0; it.hostage.model.root.position.y = 0;
+      it.beam.position.y = 0;
+    }
+    if (flatDist(it.pos, P.pos) < 3 && Math.abs(P.y - it.pos.y) < 1.5) {
+      scene.remove(it.beam);
+      if (recruit(it.hostage)) { it.hostage.model.root.position.y = 0; }
+      addPower(GAME.power.perPerson);
+      rewardCrate(it.building.alive ? new V3(it.building.ladder.x, 0, it.building.ladder.z + it.building.ladder.nz * 2) : it.pos.clone());
+      complete(it, 'Rooftop rescue!');
+    }
+  },
+  brute(it) { if (!it.enemy.alive) complete(it, 'Brute down!'); },
+  part(it) {
+    it.part.rotation.y += 0.05; it.part.position.y = 1.3 + Math.sin(world.time * 3) * 0.2;
+    if (flatDist(it.pos, P.pos) < 2.5 && P.y < 2) {
+      scene.remove(it.part);
+      sparks(it.pos.clone().setY(1.3), 0xffb800, 18, 7, 0.5);
+      addPower(10);
+      complete(it, 'Weapon part!');
+    }
+  },
+};
 
 export function updateMissions(dt) {
-  for (const camp of world.camps) {
-    updateHostages(camp.hostages, dt);
-    if (camp.state === 'guarded') {
-      camp.cage.lamp.material.emissiveIntensity = 1.5 + Math.sin(world.time * 8) * 1;
-      if (camp.guards.every(g => !g.alive)) openCage(camp);
-    } else if (camp.state === 'open') {
-      // the front wall swings open
-      camp.openT = Math.min(1, camp.openT + dt * 1.5);
-      camp.cage.sides[0].rotation.x = -camp.openT * Math.PI / 2 * 0.95;
-      if (camp.openT < 1 && Math.random() < 0.3) smoke(camp.center.clone().setY(0.5), 1, 1.5, 0xb7ab98, 3, 1);
-      if (flatDist(camp.center, P.pos) < CAGE + (P.kong ? 4 : 1.5)) freeCamp(camp);
-    }
-  }
-  // keep a few monsters roaming the streets
+  if (!mission) return;
+  for (const it of mission.items) if (!it.done || it.kind === 'camp') UPDATE[it.kind](it, dt);
+  // the brute army in tank missions is made of real monsters; they count as soon as they fall
   if (world.state === 'mission') {
     roamerT -= dt;
     const roaming = world.enemies.filter(e => e.alive && !e.camp).length;
-    if (roamerT <= 0 && roaming < world.city.roamers) { spawnRoamer(world.city.monsterTypes); roamerT = rnd(4, 8); }
-    if (world.camps.length && world.campsFreed >= world.camps.length) startBossIntro();
+    if (roamerT <= 0 && roaming < mission.level.roamers) { spawnRoamer(mission.level.monsters, mission.level.district); roamerT = rnd(4, 8); }
+    if (mission.items.every(it => it.done)) startBossIntro();
   }
 }
 
-let introT = 0;
 function startBossIntro() {
   world.state = 'bossIntro'; introT = 0;
-  world.banner?.('ALL CAMPS FREE!<small>Get ready...</small>', 2400);
-  say('All camps free! Get ready!');
+  world.banner?.('MISSION COMPLETE!<small>Get ready...</small>', 2400);
+  say('Mission complete! Get ready!');
   sfx.save();
 }
 
@@ -166,18 +231,32 @@ export function updateBossIntro(dt) {
   if (introT > 2.6 && introT - dt <= 2.6) bossArrives();
 }
 
-/* Where the yellow arrow points: the closest camp that still needs help. */
+/* Where the arrow and the minimap point. Airstrike/tank missions first send you to get the vehicle. */
 export function objective() {
+  if (!mission) return null;
+  const type = mission.type;
+  if ((type === 'airstrike' || type === 'tank') && P.vehicle?.type !== (type === 'airstrike' ? 'jet' : 'tank')) {
+    const want = type === 'airstrike' ? 'jet' : 'tank';
+    if (type === 'airstrike' || mission.items.filter(i => !i.done).length === mission.total) {
+      let best = null, bd = Infinity;
+      for (const v of world.vehicles) if (v.type === want && !v.dead) { const d = flatDist(v.pos, P.pos); if (d < bd) { bd = d; best = v.pos; } }
+      if (best) return best;
+    }
+  }
   let best = null, bd = Infinity;
-  for (const c of world.camps) {
-    if (c.state === 'freed') continue;
-    const d = flatDist(c.center, P.pos);
-    if (d < bd) { bd = d; best = c.center; }
+  for (const it of mission.items) {
+    if (it.done) continue;
+    const d = flatDist(it.pos, P.pos);
+    if (d < bd) { bd = d; best = it.pos; }
   }
   return best;
 }
 
-export function campStatus() {
-  return { freed: world.campsFreed, total: world.camps.length };
+export function missionTargets() {
+  return mission ? mission.items.filter(it => !it.done).map(it => ({ pos: it.pos, kind: it.kind })) : [];
 }
 
+export function missionStatus() {
+  if (!mission) return { icon: '', done: 0, total: 0 };
+  return { icon: MISSION_TEXT[mission.type].icon, done: mission.items.filter(i => i.done).length, total: mission.total };
+}

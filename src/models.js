@@ -8,12 +8,28 @@ import { ENV } from './engine.js';
 const cloneSkinned = SkeletonUtils.clone || SkeletonUtils.SkeletonUtils?.clone;
 
 /* name -> how tall it stands in the game (city blocks are 16 units wide). */
+const ALL = ['color', 'normal', 'orm'];
 export const MODEL_SPECS = {
   joseph:   { file: 'joseph',   height: 2.3, fallback: 0x4f6b3a, maps: ['color', 'normal', 'orm'] },
   person:   { file: 'person',   height: 2.6, fallback: 0xff8a2a, maps: ['color', 'normal', 'orm'] },
   minion:   { file: 'minion',   height: 1.9, fallback: 0x7a4fb0, maps: ['color', 'normal', 'orm'] },
   godzilla: { file: 'godzilla', height: 8.5, fallback: 0x55704a, maps: ['color'] },
   kong:     { file: 'kong',     height: 12,  fallback: 0x2b2522, maps: ['color', 'normal', 'orm'] },
+  ice:      { file: 'boss_ice',     height: 8.5, fallback: 0xbfe4ff, maps: ['color'] },
+  thunder:  { file: 'boss_thunder', height: 8.5, fallback: 0x222222, maps: ['color'] },
+  mecha:    { file: 'boss_mecha',   height: 8.5, fallback: 0x55585e, maps: ALL },
+  shadow:   { file: 'boss_shadow',  height: 8.5, fallback: 0x1a1020, maps: ['color'] },
+  swamp:    { file: 'boss_swamp',   height: 8.5, fallback: 0x3d4a22, maps: ['color'] },
+  // vehicles and guns are sized by length; Meshy built them facing -X, so turn them to face +Z (forward)
+  car:      { file: 'car',  length: 4.8, fallback: 0xa31621, maps: ALL, yawFix: Math.PI / 2 },
+  tank:     { file: 'tank', length: 9.5, fallback: 0x4b5233, maps: ALL, yawFix: Math.PI / 2 },
+  jet:      { file: 'jet',  length: 17,  fallback: 0x8a9096, maps: ALL, yawFix: Math.PI / 2 },
+  gun_blaster:   { file: 'gun_blaster',   length: 0.32, fallback: 0x222222, maps: ALL, yawFix: Math.PI / 2, gun: true },
+  gun_rifle:     { file: 'gun_rifle',     length: 0.95, fallback: 0x222222, maps: ALL, yawFix: Math.PI / 2, gun: true },
+  gun_shotgun:   { file: 'gun_shotgun',   length: 1.0,  fallback: 0x222222, maps: ALL, yawFix: Math.PI / 2, gun: true },
+  gun_bazooka:   { file: 'gun_bazooka',   length: 1.2,  fallback: 0x4b5233, maps: ALL, yawFix: Math.PI / 2, gun: true },
+  gun_lightning: { file: 'gun_lightning', length: 0.62, fallback: 0x444444, maps: ALL, yawFix: Math.PI / 2, gun: true },
+  gun_freeze:    { file: 'gun_freeze',    length: 0.62, fallback: 0xdddddd, maps: ALL, yawFix: Math.PI / 2, gun: true },
 };
 
 const loaded = {};
@@ -85,19 +101,22 @@ function prepare(name, gltf, maps) {
   const spec = MODEL_SPECS[name];
   const src = gltf.scene;
   const box = measureSkinned(src);
-  const h = box.max.y - box.min.y;
-  const scale = h > 0 ? spec.height / h : 1;
+  const size = box.getSize(new THREE.Vector3());
+  const scale = spec.length ? spec.length / Math.max(size.x, size.z, 1e-6) : (size.y > 0 ? spec.height / size.y : 1);
+  const center = box.getCenter(new THREE.Vector3());
   src.traverse(o => {
     if (!o.isMesh) return;
     o.castShadow = true;
     o.receiveShadow = true;
-    o.frustumCulled = false; // skinned bounds don't follow the animation
+    if (o.isSkinnedMesh) o.frustumCulled = false; // skinned bounds don't follow the animation (characters are culled by distance instead)
     if (o.material) { applyMaps(o.material, maps); o.material.envMapIntensity = ENV.characters; }
   });
   const clips = {};
   for (const c of gltf.animations) clips[c.name] = stripRootMotion(c);
-  return { scene: src, clips, scale, minY: box.min.y * scale };
+  return { scene: src, clips, scale, minY: box.min.y * scale, cx: spec.length ? center.x * scale : 0, cz: spec.length ? center.z * scale : 0, cy: spec.gun ? center.y * scale : null, yawFix: spec.yawFix || 0 };
 }
+
+export const hasModel = name => !!loaded[name];
 
 export async function loadModels(onProgress) {
   const names = Object.keys(MODEL_SPECS);
@@ -118,6 +137,11 @@ export async function loadModels(onProgress) {
 function fallbackFigure(spec) {
   const g = new THREE.Group();
   const mat = new THREE.MeshStandardMaterial({ color: spec.fallback, roughness: 0.7 });
+  if (spec.length) { // simple box stand-in for vehicles and guns
+    const box = new THREE.Mesh(new THREE.BoxGeometry(spec.length * 0.4, spec.length * 0.25, spec.length), mat);
+    box.position.y = spec.gun ? 0 : spec.length * 0.125; box.castShadow = true; g.add(box);
+    return g;
+  }
   const r = spec.height * 0.18;
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(r, spec.height * 0.45, 4, 10), mat);
   body.position.y = spec.height * 0.42;
@@ -200,8 +224,12 @@ export function spawnModel(name, { tint = null, sizeMul = 1 } = {}) {
   });
   const s = src.scale * sizeMul;
   inst.scale.multiplyScalar(s);
-  inst.position.y = -src.minY * sizeMul;
-  holder.add(inst);
+  // guns are centred on their middle; everything else stands on the ground
+  inst.position.set(-src.cx * sizeMul, src.cy !== null ? -src.cy * sizeMul : -src.minY * sizeMul, -src.cz * sizeMul);
+  const pivot = new THREE.Group();
+  pivot.rotation.y = src.yawFix;
+  pivot.add(inst);
+  holder.add(pivot);
   return { root: holder, anim: new Animator(inst, src.clips), materials, bones, isFallback: false };
 }
 
@@ -231,3 +259,19 @@ export function disposeGroup(group) {
     if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (!m.userData.shared) m.dispose(); });
   });
 }
+
+/* Animated characters can't use three's built-in culling (their bounds don't follow the bones),
+   so they're hidden when they are off-screen or far away. */
+const frustum = new THREE.Frustum(), viewProj = new THREE.Matrix4(), sphere = new THREE.Sphere(), camPos = new THREE.Vector3();
+export function updateCulling(camera) {
+  camera.updateMatrixWorld();
+  viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+  frustum.setFromProjectionMatrix(viewProj);
+  camPos.setFromMatrixPosition(camera.matrixWorld);
+}
+export function inView(pos, radius = 2.5, maxDist = 150) {
+  sphere.center.set(pos.x, (pos.y || 0) + radius * 0.6, pos.z);
+  sphere.radius = radius;
+  return sphere.center.distanceTo(camPos) < maxDist && frustum.intersectsSphere(sphere);
+}
+

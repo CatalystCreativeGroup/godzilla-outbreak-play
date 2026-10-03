@@ -1,40 +1,47 @@
-// Godzilla Outbreak: game flow, camera and the main loop.
+// Godzilla Outbreak: level flow, controls wiring and the main loop.
 import * as THREE from 'three';
 import { renderer, scene, camera, applyTheme, followSun, QUALITY } from './engine.js';
-import { CITIES, WEAPONS } from './settings.js';
-import { V3, rnd, world, P, loadout, $, lerp } from './world.js';
-import { loadModels } from './models.js';
-import { buildCity, updateCity } from './city.js';
-import { updateFx, shakeState, setMoteColor, sparks } from './fx.js';
+import { GAME, WEAPONS } from './settings.js';
+import { LEVELS, MISSION_TEXT } from './levels.js';
+import { V3, rnd, world, P, loadout, $ } from './world.js';
+import { loadModels, updateCulling } from './models.js';
+import { buildWorld, updateMap, resetBuildings, ladderNear, DISTRICTS } from './map.js';
+import { setMapTheme } from './map-props.js';
+import { updateFx, setMoteColor, sparks } from './fx.js';
 import { initAudio, sfx, say, toggleSound } from './audio.js';
 import { updateShots, clearShots, setHostileTargets } from './weapons.js';
 import { updateLoot, clearLoot } from './loot.js';
 import { updateEnemies, clearEnemies, setVictims } from './enemies.js';
-import { updateAllies, gatherAllies, restoreArmy } from './allies.js';
-import { createHero, resetHero, updateHero, heroVictim, heroJump, tryMorph, kongPunch, kongRoar, hurtPlayer, addPower, equipGun, poseHeroForTitle, firstPerson } from './hero.js';
+import { updateAllies, gatherAllies, restoreArmy, spawnSoldiers } from './allies.js';
+import { createHero, resetHero, updateHero, heroVictim, heroJump, tryMorph, kongPunch, kongRoar, hurtPlayer, addPower, equipGun, poseHeroForTitle, firstPerson, startClimb } from './hero.js';
 import { updateCamera } from './camera.js';
 import { setupBoss, updateBoss, hideBoss, poseBossForTitle } from './boss.js';
-import { setupMissions, updateMissions, updateBossIntro, objective, clearCamps } from './missions.js';
-import { updateHud, updateWeaponHud, setKongControls, banner, flashScreen, hurtFlash, showScreen, renderCityPicker, initInput, moveInput, resetHudCache, updateCompass } from './hud.js';
-import { loadSave, applySave, writeSave, nextCityIndex, resetSave } from './save.js';
-import { GAME } from './settings.js';
+import { setupMission, updateMissions, updateBossIntro, objective, clearMission, missionTargets } from './missions.js';
+import { updateNests } from './nests.js';
+import { scatterCrates } from './crates.js';
+import { setupVehicles, updateVehicles, vehicleNear, enterVehicle, exitVehicle, vehicleVictim, clearBombs } from './vehicles.js';
+import { initMinimap, updateMinimap } from './minimap.js';
+import { updateHud, updateWeaponHud, setKongControls, setVehicleControls, setAction, banner, flashScreen, hurtFlash, showScreen, renderLevelPicker, initInput, moveInput, resetHudCache, updateCompass } from './hud.js';
+import { loadSave, applySave, writeSave, nextLevelIndex, resetSave } from './save.js';
 
-const START = new V3(0, 0, 14);
-const MOTE_COLORS = { day: 0xfff4e0, golden: 0xffd8a8, harbor: 0xe8f0ff, volcano: 0x8a7a70, storm: 0xc8c0e8 };
+const START = new V3(-4, 0, 12); // on the street at the south edge of the downtown park
+const MOTE_COLORS = { day: 0xfff4e0, golden: 0xffd8a8, harbor: 0xe8f0ff, volcano: 0x8a7a70, storm: 0xc8c0e8, night: 0xb8c8ff };
 
 /* ---------- wiring between systems ---------- */
 Object.assign(world, {
   banner, flash: flashScreen, hurtFlash, hurtPlayer,
-  setKongMode: setKongControls,
+  setKongMode: isKong => { setKongControls(isKong); setVehicleControls(null); },
   onWeaponChange: () => { equipGun(); updateWeaponHud(); writeSave(); },
   onEnemyDefeated: () => addPower(GAME.power.perMonster),
-  onBossDefeated: winCity,
+  onBossDefeated: winLevel,
+  onVehicleChange: () => setVehicleControls(P.vehicle),
+  spawnSoldiers,
 });
-const victims = () => [heroVictim, ...world.allies].filter(v => v.alive);
+const victims = () => [heroVictim, vehicleVictim, ...world.allies].filter(v => v.alive);
 setHostileTargets(victims);
 setVictims(victims);
 
-/* ---------- objective arrow above Joseph ---------- */
+/* ---------- objective arrow above Joseph (outside view) ---------- */
 const arrow = new THREE.Group();
 const arrowMat = new THREE.MeshStandardMaterial({ color: 0xffc23d, emissive: 0xffa000, emissiveIntensity: 0.6, roughness: 0.3, metalness: 0.6 });
 const tip = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.1, 4), arrowMat); tip.rotation.x = Math.PI / 2; tip.position.z = 1.4;
@@ -50,69 +57,78 @@ function updateArrow() {
   updateCompass(far ? target : null);
   arrow.visible = !!far && P.morphT <= 0 && !firstPerson();
   if (!arrow.visible) return;
-  arrow.position.set(P.pos.x, (P.kong ? 14 : 3.4) + P.y + Math.sin(world.time * 5) * 0.2, P.pos.z);
+  const big = P.kong ? 2.5 : P.vehicle ? (P.vehicle.type === 'jet' ? 3 : 1.8) : 1;
+  arrow.position.set(P.pos.x, (P.kong ? 14 : P.vehicle ? 6 : 3.4) + P.y + Math.sin(world.time * 5) * 0.2, P.pos.z);
   arrow.rotation.y = Math.atan2(target.x - P.pos.x, target.z - P.pos.z);
-  arrow.scale.setScalar(P.kong ? 2.5 : 1);
+  arrow.scale.setScalar(big);
 }
 
-/* ---------- city flow ---------- */
-function loadCityScene(index) {
-  const city = CITIES[index];
-  world.cityIndex = index;
-  world.city = city;
-  const theme = applyTheme(city.theme);
-  setMoteColor(MOTE_COLORS[city.theme] || 0xfff4e0, city.theme === 'volcano' ? 0.28 : 0.18);
-  clearEnemies(); clearLoot(); clearShots(); clearCamps(); hideBoss();
-  const sites = buildCity(city.theme, city.camps.length);
-  setupBoss(city.boss);
-  return { city, sites, theme };
+/* ---------- level flow ---------- */
+function prepareLevel(index) {
+  const level = LEVELS[index];
+  world.levelIndex = index;
+  world.level = level;
+  applyTheme(level.theme);
+  setMapTheme(level.theme);
+  setMoteColor(MOTE_COLORS[level.theme] || 0xfff4e0, level.theme === 'volcano' ? 0.28 : 0.18);
+  clearEnemies(); clearLoot(); clearShots(); clearMission(); clearBombs(); hideBoss();
+  resetBuildings();
+  scatterCrates();
+  setupVehicles();
+  setupBoss(level.boss);
+  return level;
 }
 
-function startCity(index) {
+function startLevel(index) {
   initAudio();
   try { navigator.wakeLock?.request('screen').catch(() => {}); } catch (e) { /* not supported */ }
-  const { city, sites } = loadCityScene(index);
+  const level = prepareLevel(index);
   resetHero(START);
-  setupMissions(index, sites);
+  setupMission(level);
   gatherAllies();
   setKongControls(false);
+  setVehicleControls(null);
   updateWeaponHud();
   resetHudCache();
   showScreen(null);
   world.state = 'mission';
-  banner(`${city.name}<small>Free the people in the monster camps!</small>`, 3600);
-  say(`${city.name.toLowerCase()}. Free the people in the monster camps!`);
+  const where = DISTRICTS[level.district].name;
+  const goal = MISSION_TEXT[level.mission.type].goal;
+  banner(`LEVEL ${index + 1}: ${level.name}<small>${where}: ${goal}</small>`, 4200);
+  say(`Level ${index + 1}. ${goal}`);
 }
 
-function winCity() {
+function winLevel() {
   world.state = 'win';
   sfx.win();
-  const city = world.city;
-  if (!loadout.citiesBeaten.includes(city.id)) loadout.citiesBeaten = [...loadout.citiesBeaten, city.id];
-  if (city.boss.reward && !loadout.kongPowers.includes(city.boss.reward)) loadout.kongPowers = [...loadout.kongPowers, city.boss.reward];
+  const level = world.level, n = world.levelIndex + 1;
+  if (P.vehicle) exitVehicle();
+  if (!loadout.levelsBeaten.includes(n)) loadout.levelsBeaten = [...loadout.levelsBeaten, n];
+  if (level.reward && !loadout.kongPowers.includes(level.reward)) loadout.kongPowers = [...loadout.kongPowers, level.reward];
   writeSave();
   for (let i = 0; i < 6; i++) setTimeout(() => sparks(new V3(P.pos.x + rnd(-8, 8), 10, P.pos.z + rnd(-8, 8)), [0xffd23f, 0x9dff4a, 0xff7b24, 0x6ff6ff][i % 4], 30, 14, 0.7), i * 250);
-  const isLast = world.cityIndex === CITIES.length - 1;
+  const isLast = world.levelIndex === LEVELS.length - 1;
   setTimeout(() => {
     if (isLast) { showScreen('ending'); return; }
-    $('win-reward').textContent = city.boss.reward;
+    $('win-title').textContent = `LEVEL ${n} DONE!`;
+    $('win-reward-box').hidden = !level.reward;
+    $('win-reward').textContent = level.reward || '';
     $('win-army').textContent = world.allies.length;
-    const next = CITIES[world.cityIndex + 1];
-    $('win-next').textContent = `Next: ${next.name} — ${next.boss.name}`;
+    const next = LEVELS[world.levelIndex + 1];
+    $('win-next').textContent = `Next: Level ${n + 1}, ${next.name}`;
     showScreen('win');
   }, 1600);
 }
 
 function showTitle() {
   world.state = 'title';
-  const idx = nextCityIndex();
-  loadCityScene(idx);
+  prepareLevel(nextLevelIndex());
   resetHero(new V3(0, 0, 12));
   setKongControls(false);
   gatherAllies();
   showScreen('title');
-  $('play-btn').textContent = loadout.citiesBeaten.length ? 'CONTINUE' : 'PLAY';
-  renderCityPicker(i => startCity(i));
+  $('play-btn').textContent = loadout.levelsBeaten.length ? `CONTINUE (LEVEL ${nextLevelIndex() + 1})` : 'PLAY';
+  renderLevelPicker(i => startLevel(i));
 }
 
 /* ---------- controls ---------- */
@@ -124,24 +140,34 @@ function toggleView() {
   $('btn-view').textContent = world.view === 'first' ? '👁️' : '🎥';
   resetHudCache();
 }
-
 function swapWeapon(dir = 1) {
-  if (P.kong || loadout.owned.length < 2) return;
+  if (P.kong || P.vehicle || loadout.owned.length < 2) return;
   const i = loadout.owned.indexOf(loadout.current);
   loadout.current = loadout.owned[(i + dir + loadout.owned.length) % loadout.owned.length];
   world.onWeaponChange();
   sfx.pickup();
 }
+/* The action button does whatever makes sense right here. */
+function contextAction() {
+  if (P.vehicle) return { label: '🚪 EXIT', run: exitVehicle };
+  const v = vehicleNear();
+  if (v) return { label: v.t.label, run: () => enterVehicle(v) };
+  const ladder = !P.kong && !P.climb ? ladderNear(P.pos, P.y) : null;
+  if (ladder) return { label: '🪜 CLIMB', run: () => startClimb(ladder) };
+  return null;
+}
 initInput({
   jump: heroJump, punch: kongPunch, morph: tryMorph, roar: kongRoar,
   swap: () => swapWeapon(1),
   view: toggleView,
-  select: i => { if (!P.kong && loadout.owned[i]) { loadout.current = loadout.owned[i]; world.onWeaponChange(); } },
+  act: () => { if (world.state === 'mission' || world.state === 'boss') contextAction()?.run(); },
+  select: i => { if (!P.kong && !P.vehicle && loadout.owned[i]) { loadout.current = loadout.owned[i]; world.onWeaponChange(); } },
 });
-$('play-btn').addEventListener('click', () => startCity(nextCityIndex()));
-$('next-btn').addEventListener('click', () => startCity(Math.min(world.cityIndex + 1, CITIES.length - 1)));
+window.addEventListener('keydown', e => { if (e.code === 'KeyG' && (world.state === 'mission' || world.state === 'boss')) contextAction()?.run(); });
+$('play-btn').addEventListener('click', () => startLevel(nextLevelIndex()));
+$('next-btn').addEventListener('click', () => startLevel(Math.min(world.levelIndex + 1, LEVELS.length - 1)));
 $('title-btn').addEventListener('click', showTitle);
-$('again-btn').addEventListener('click', () => startCity(CITIES.length - 1));
+$('again-btn').addEventListener('click', () => startLevel(LEVELS.length - 1));
 // Two taps to start over (pop-up dialogs aren't available everywhere this game runs).
 let resetArmed = null;
 $('reset-btn').addEventListener('click', () => {
@@ -182,21 +208,26 @@ function update(dt) {
     poseBossForTitle(dt);
     updateAllies(dt);
   } else if (world.state !== 'loading') {
-    const inp = (world.state === 'mission' || world.state === 'boss') ? moveInput(dt) : { x: 0, z: 0, l: 0 };
+    const live = world.state === 'mission' || world.state === 'boss';
+    const inp = live ? moveInput(dt) : { x: 0, z: 0, l: 0 };
+    updateVehicles(dt, inp);
     updateHero(dt, inp);
     updateAllies(dt);
-    if (world.state !== 'win' && world.state !== 'ending') { updateEnemies(dt); updateShots(dt); }
+    if (world.state !== 'win' && world.state !== 'ending') { updateEnemies(dt); updateShots(dt); updateNests(dt); }
     updateBoss(dt);
     updateLoot(dt);
     updateMissions(dt);
     if (world.state === 'bossIntro') updateBossIntro(dt);
     updateArrow();
     updateHud();
+    setAction(live ? contextAction()?.label : null);
+    updateMinimap();
   }
-  updateCity(dt, camera, !firstPerson());
-  const focus = world.state === 'title' || world.state === 'loading' ? new V3() : P.pos;
+  updateMap(dt, camera, !firstPerson());
+  const focus = world.state === 'title' || world.state === 'loading' ? new V3(0, 0, 6) : P.pos;
   updateFx(dt, focus);
   updateCamera(dt);
+  updateCulling(camera);
   followSun(focus);
 }
 
@@ -215,15 +246,16 @@ async function boot() {
   showScreen('loading');
   applySave(loadSave());
   applyTheme('day');
+  buildWorld();
+  initMinimap();
   loop();
   await loadModels(f => { $('load-fill').style.width = Math.round(f * 100) + '%'; });
   createHero();
   const saved = loadSave();
   if (saved?.army) restoreArmy(Math.min(saved.army, GAME.army.maxSize));
-  for (const a of world.allies) a.model.root.visible = true;
   updateWeaponHud();
   $('btn-view').textContent = world.view === 'first' ? '👁️' : '🎥';
   showTitle();
-  window.__game = { world, P, loadout, startCity, WEAPONS }; // handy for testing
+  window.__game = { world, P, loadout, startLevel, WEAPONS, LEVELS, objective, missionTargets, act: () => contextAction()?.run(), action: () => contextAction()?.label }; // handy for testing
 }
 boot();

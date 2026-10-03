@@ -1,8 +1,9 @@
 // On-screen HUD (hearts, armor, Kong meter, mission, boss bar, current gun) and touch / keyboard controls.
-import { GAME, WEAPONS, CITIES, MAX_WEAPON_LEVEL } from './settings.js';
+import { GAME, WEAPONS, MAX_WEAPON_LEVEL } from './settings.js';
+import { LEVELS } from './levels.js';
 import { firstPerson } from './hero.js';
 import { $, world, P, loadout } from './world.js';
-import { campStatus } from './missions.js';
+import { missionStatus } from './missions.js';
 import { bossHealthFraction, bossName } from './boss.js';
 
 const last = {};
@@ -31,11 +32,11 @@ export function updateHud() {
     $('meter').classList.toggle('kong', P.kong);
     $('btn-morph').classList.toggle('ready', ready);
   });
-  const cs = campStatus();
-  setIfChanged('mission', `${cs.freed}/${cs.total}/${world.allies.length}`, () => {
-    $('m-camps').innerHTML = `<span class="ic">🏚️</span><b>${cs.freed}/${cs.total}</b>`;
+  const ms = missionStatus();
+  setIfChanged('mission', `${ms.icon}${ms.done}/${ms.total}/${world.allies.length}`, () => {
+    $('m-camps').innerHTML = `<span class="ic">${ms.icon}</span><b>${ms.done}/${ms.total}</b>`;
     $('m-army').innerHTML = `<span class="ic">🪖</span><b>${world.allies.length}/${GAME.army.maxSize}</b>`;
-    $('m-camps').classList.toggle('done', cs.total > 0 && cs.freed >= cs.total);
+    $('m-camps').classList.toggle('done', ms.total > 0 && ms.done >= ms.total);
   });
   const bossOn = world.state === 'boss' || (world.state === 'bossIntro' && world.bossTarget);
   setIfChanged('bossOn', !!bossOn, on => { $('boss-bar').hidden = !on; $('boss-name').textContent = bossName(); });
@@ -44,7 +45,8 @@ export function updateHud() {
     setIfChanged('bossHp', hp, v => { $('boss-fill').style.width = v + '%'; $('boss-bar').classList.toggle('mad', v <= 50); });
   }
   setIfChanged('roarCool', P.kong && P.roarCd > 0, c => $('btn-a').classList.toggle('cool', c));
-  setIfChanged('crosshair', firstPerson() || !P.kong ? (world.aimTarget ? 'on' : 'off') : 'hidden', v => {
+  const showCross = P.vehicle ? P.vehicle.type === 'tank' : (firstPerson() || !P.kong);
+  setIfChanged('crosshair', showCross ? (world.aimTarget && !P.vehicle ? 'on' : 'off') : 'hidden', v => {
     $('crosshair').hidden = v === 'hidden';
     $('crosshair').classList.toggle('on', v === 'on');
   });
@@ -68,7 +70,7 @@ export function updateWeaponHud() {
   $('btn-swap-ic').textContent = w.icon;
   $('weapon-name').textContent = w.name;
   $('weapon-stars').textContent = '★'.repeat(lvl) + '☆'.repeat(MAX_WEAPON_LEVEL - lvl);
-  $('weapon-rate').textContent = loadout.rateLevel > 1 ? `⏩${loadout.rateLevel}` : '';
+  $('weapon-rate').textContent = (loadout.fullAuto[loadout.current] ? 'FULL AUTO ' : 'SEMI ') + (loadout.rateLevel > 1 ? `⏩${loadout.rateLevel}` : '');
   $('btn-swap').classList.toggle('single', loadout.owned.length < 2);
 }
 
@@ -104,22 +106,42 @@ export function showScreen(id) {
   for (const s of ['loading', 'title', 'win', 'ending']) $(s).hidden = s !== id;
   const inGame = !id;
   $('hud').hidden = !inGame; $('controls').hidden = !inGame;
+  $('minimap').hidden = !inGame;
 }
 
-/* City buttons on the title screen: beaten cities get a check, the next one is open, later ones are locked. */
-export function renderCityPicker(onPick) {
+/* Level buttons on the title screen: beaten levels get a check, the next one is open, later ones are locked. */
+export function renderLevelPicker(onPick) {
   const wrap = $('city-picker');
   wrap.innerHTML = '';
-  CITIES.forEach((c, i) => {
-    const beaten = loadout.citiesBeaten.includes(c.id);
-    const open = beaten || i === 0 || loadout.citiesBeaten.includes(CITIES[i - 1].id);
+  LEVELS.forEach((lv, i) => {
+    const beaten = loadout.levelsBeaten.includes(i + 1);
+    const open = beaten || i === 0 || loadout.levelsBeaten.includes(i);
     const b = document.createElement('button');
     b.className = 'city-btn' + (beaten ? ' beaten' : '') + (open ? '' : ' locked');
     b.disabled = !open;
-    b.innerHTML = `<span class="n">${i + 1}</span><span class="t">${c.name}</span><span class="s">${beaten ? '✔' : open ? '▶' : '🔒'}</span>`;
+    b.title = lv.name;
+    b.innerHTML = `<span class="n">${i + 1}</span><span class="s">${beaten ? '✔' : open ? '▶' : '🔒'}</span>`;
     if (open) b.addEventListener('click', () => onPick(i));
     wrap.appendChild(b);
   });
+}
+
+/* The context button: DRIVE / FLY / TANK / CLIMB / EXIT (hidden when there's nothing to do). */
+export function setAction(label) {
+  setIfChanged('action', label || '', v => { $('btn-act').hidden = !v; $('btn-act-label').textContent = v; });
+}
+
+/* Inside a vehicle only the driving controls make sense. */
+export function setVehicleControls(v) {
+  const inside = !!v;
+  $('btn-a').hidden = inside;
+  $('btn-swap').hidden = inside || P.kong;
+  $('btn-morph').hidden = inside || P.kong;
+  $('weapon-chip').hidden = inside || P.kong;
+  $('btn-fire').hidden = inside && v.type === 'car';
+  $('btn-fire-ic').textContent = !inside ? (P.kong ? '👊' : '🎯') : v.type === 'jet' ? '💣' : '💥';
+  $('btn-fire-label').textContent = !inside ? (P.kong ? 'PUNCH' : 'FIRE') : v.type === 'jet' ? 'BOMB' : 'CANNON';
+  resetHudCache();
 }
 
 /* ---------- input ---------- */
@@ -162,10 +184,11 @@ export function initInput(actions) {
   pad('btn-morph', actions.morph);
   pad('btn-swap', actions.swap);
   pad('btn-view', actions.view);
+  pad('btn-act', actions.act);
 
   // FIRE: hold to keep shooting
   const fire = $('btn-fire');
-  fire.addEventListener('pointerdown', e => { e.preventDefault(); fire.setPointerCapture(e.pointerId); fire.classList.add('down'); P.firing = true; });
+  fire.addEventListener('pointerdown', e => { e.preventDefault(); fire.setPointerCapture(e.pointerId); fire.classList.add('down'); P.firing = true; P.fireQueued = true; });
   for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) fire.addEventListener(ev, () => { fire.classList.remove('down'); P.firing = false; });
 
   // LOOK: drag the right side of the screen to turn and aim
@@ -181,6 +204,7 @@ export function initInput(actions) {
     if (e.pointerId !== drag.id) return;
     const k = 0.0055 * GAME.controls.lookSpeed;
     P.yaw -= (e.clientX - drag.x) * k;
+    P.lookT = 1.5; // while driving, the camera stays where you looked for a moment
     P.pitch = Math.max(-0.6, Math.min(0.6, P.pitch - (e.clientY - drag.y) * k * 0.8));
     drag.x = e.clientX; drag.y = e.clientY;
   });
@@ -192,7 +216,7 @@ export function initInput(actions) {
     keys.add(e.code);
     if (!['mission', 'boss', 'bossIntro'].includes(world.state)) return;
     if (e.code === 'Space') { e.preventDefault(); P.kong ? actions.roar() : actions.jump(); }
-    if (e.code === 'KeyF' || e.code === 'Enter') P.firing = true;
+    if ((e.code === 'KeyF' || e.code === 'Enter') && !e.repeat) { P.firing = true; P.fireQueued = true; }
     if (e.code === 'KeyV') actions.view();
     if (e.code === 'KeyM' || e.code === 'KeyE') actions.morph();
     if (e.code === 'KeyR') actions.roar();

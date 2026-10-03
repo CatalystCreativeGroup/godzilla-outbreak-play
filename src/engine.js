@@ -21,7 +21,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 export const scene = new THREE.Scene();
 /* The sky's reflected light is very bright; most surfaces only take part of it so colors stay rich. */
 export const ENV = { characters: 0.4, city: 0.45, glass: 1.0, guns: 0.55 };
-export const camera = new THREE.PerspectiveCamera(50, 1, 0.5, 520);
+export const camera = new THREE.PerspectiveCamera(50, 1, 0.5, 900);
 
 // Sky dome (Preetham model) and a matching environment map for reflections.
 const sky = new Sky();
@@ -54,6 +54,7 @@ export const THEMES = {
   golden:  { elevation: 16, azimuth: 120, turbidity: 9,  rayleigh: 2.4, mie: 0.008, sun: 0xffc98a, sunI: 2.4, hemiSky: 0xffe2c2, hemiGround: 0x4f4034, hemiI: 0.3,  fog: 0xe8c39e, fogD: 0.0052, exposure: 0.8 },
   harbor:  { elevation: 30, azimuth: 200, turbidity: 12, rayleigh: 1.0, mie: 0.01,  sun: 0xeaf2ff, sunI: 1.7, hemiSky: 0xcfdcea, hemiGround: 0x46505a, hemiI: 0.45, fog: 0xaebccb, fogD: 0.0062, exposure: 0.8 },
   volcano: { elevation: 7,  azimuth: 100, turbidity: 18, rayleigh: 3.6, mie: 0.02,  sun: 0xff8a4a, sunI: 2.2, hemiSky: 0xff9a6a, hemiGround: 0x2a1610, hemiI: 0.35, fog: 0x7a4030, fogD: 0.0085, exposure: 0.85 },
+  night:   { elevation: 3,  azimuth: 260, turbidity: 3,  rayleigh: 0.4, mie: 0.004, sun: 0x9fb4ff, sunI: 0.9, hemiSky: 0x3a4a7a, hemiGround: 0x15161c, hemiI: 0.6,  fog: 0x161c2c, fogD: 0.0065, exposure: 1.05 },
   storm:   { elevation: 10, azimuth: 250, turbidity: 20, rayleigh: 0.6, mie: 0.03,  sun: 0xc9b8ff, sunI: 1.6, hemiSky: 0x9a8fc0, hemiGround: 0x241f2c, hemiI: 0.5,  fog: 0x4c4660, fogD: 0.0075, exposure: 0.9 },
 };
 

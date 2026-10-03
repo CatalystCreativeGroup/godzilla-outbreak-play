@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeBufferGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { spawnModel, hasModel, MODEL_SPECS } from './models.js';
 
 const shared = m => { m.userData.shared = true; return m; };
 const MAT = {
@@ -137,8 +138,25 @@ function mergeByMaterial(g) {
   }
 }
 
+/* The realistic Higgsfield gun model when it's loaded (muzzle at the front, +Z). */
+function modelGun(id, scale) {
+  const name = 'gun_' + id;
+  const m = spawnModel(name);
+  const g = new THREE.Group();
+  g.add(m.root);
+  const muzzleMark = new THREE.Object3D();
+  muzzleMark.name = 'muzzle';
+  muzzleMark.position.set(0, 0.02, MODEL_SPECS[name].length / 2);
+  g.add(muzzleMark);
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.material.envMapIntensity = 0.6; } });
+  g.userData.sharedGeometry = true;
+  g.scale.setScalar(scale);
+  return g;
+}
+
 const templates = {};
 export function makeGun(id, scale = 1) {
+  if (hasModel('gun_' + id)) return modelGun(id, scale);
   const key = BUILDERS[id] ? id : 'blaster';
   if (!templates[key]) {
     const t = new THREE.Group();

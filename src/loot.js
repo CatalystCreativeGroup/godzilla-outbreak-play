@@ -14,6 +14,10 @@ const KINDS = {
   rate:   { color: 0x5ad1ff, label: 'FASTER!' },
   armor:  { color: 0x5a8cff, label: 'ARMOR!' },
   heart:  { color: 0xff4d6d, label: '+HEART' },
+  auto:   { color: 0xffd400, label: 'FULL AUTO!' },
+  soldier1: { color: 0x9dff4a, label: '+1 SOLDIER', soldiers: 1 },
+  soldier2: { color: 0x9dff4a, label: '+2 SOLDIERS', soldiers: 2 },
+  soldier5: { color: 0x9dff4a, label: '+5 SOLDIERS', soldiers: 5 },
 };
 
 const crateGeo = new RoundedBoxGeometry(1.1, 0.8, 0.8, 2, 0.08);
@@ -25,7 +29,7 @@ function iconTexture(kind, weaponId) {
   if (iconCache[key]) return iconCache[key];
   const c = document.createElement('canvas'); c.width = c.height = 128;
   const g = c.getContext('2d');
-  const emoji = kind === 'weapon' ? WEAPONS[weaponId].icon : { power: '💪', rate: '⏩', armor: '🛡️', heart: '❤️' }[kind];
+  const emoji = kind === 'weapon' ? WEAPONS[weaponId].icon : { power: '💪', rate: '⏩', armor: '🛡️', heart: '❤️', auto: '♾️', soldier1: '🪖', soldier2: '🪖', soldier5: '🪖' }[kind];
   g.font = '92px serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
   g.fillText(emoji, 64, 70);
   const t = new THREE.CanvasTexture(c);
@@ -37,11 +41,11 @@ export function dropLoot(pos, forcedKind = null, forcedWeapon = null) {
   let kind = forcedKind;
   if (!kind) {
     const roll = Math.random();
-    kind = roll < 0.12 ? 'weapon' : roll < 0.38 ? 'power' : roll < 0.58 ? 'rate' : roll < 0.8 ? 'armor' : 'heart';
+    kind = roll < 0.1 ? 'weapon' : roll < 0.3 ? 'power' : roll < 0.44 ? 'rate' : roll < 0.6 ? 'armor' : roll < 0.75 ? 'heart' : roll < 0.84 ? 'auto' : roll < 0.95 ? 'soldier1' : 'soldier2';
   }
   let weaponId = forcedWeapon;
   if (kind === 'weapon' && !weaponId) {
-    const unlockable = (world.city?.unlocks || []).filter(w => !loadout.owned.includes(w));
+    const unlockable = (world.level?.unlocks || []).filter(w => !loadout.owned.includes(w));
     if (!unlockable.length) kind = 'power';
     else weaponId = pick(unlockable);
   }
@@ -99,6 +103,17 @@ function grab(p) {
   } else if (p.kind === 'heart') {
     P.hearts = Math.min(GAME.hero.hearts, P.hearts + 1);
     sfx.pickup();
+  } else if (p.kind === 'auto') {
+    // semi-auto guns fire once per tap; FULL AUTO lets you hold FIRE
+    loadout.fullAuto = { ...loadout.fullAuto, [loadout.current]: true };
+    text = WEAPONS[loadout.current].name + ' FULL AUTO!';
+    say('Full auto!');
+    sfx.unlock();
+    world.onWeaponChange?.();
+  } else if (k.soldiers) {
+    const joined = world.spawnSoldiers?.(k.soldiers) ?? 0;
+    if (!joined) text = 'ARMY FULL!';
+    sfx.save();
   }
   sparks(p.pos.clone().setY(1), k.color, 14, 7, 0.5);
   popWord(text, new V3(p.pos.x, 3.5, p.pos.z), '#' + k.color.toString(16).padStart(6, '0'), 3.4);

@@ -5,7 +5,7 @@ import { WEAPONS, MAX_WEAPON_LEVEL } from './settings.js';
 import { sfx } from './audio.js';
 import { sparks, flash, fireball, bolt, shake, smoke } from './fx.js';
 import { V3, rnd, world, loadout } from './world.js';
-import { smashNear } from './city.js';
+import { smashNear } from './map.js';
 
 /* Damage multiplier for a weapon level (level 1 = x1, each level +30%). */
 export const levelMul = lvl => 1 + 0.3 * (Math.min(lvl, MAX_WEAPON_LEVEL) - 1);
@@ -19,7 +19,8 @@ export function teamMul() {
 
 /* Things bullets can hit: monsters plus the boss when it's in the fight. */
 export function liveTargets() {
-  const list = world.enemies.filter(e => e.alive);
+  const list = world.enemies.filter(e => e.alive && !e.removed);
+  for (const n of world.nests) if (n.alive) list.push(n);
   if (world.bossTarget && world.bossTarget.alive) list.push(world.bossTarget);
   return list;
 }
@@ -61,12 +62,12 @@ function segmentHitsSphere(a, b, c, r) {
   return a.clone().addScaledVector(ab, t).distanceToSquared(c) < r * r;
 }
 
-function explode(pos, radius, damage, element) {
+export function explode(pos, radius, damage, element) {
   fireball(pos, radius);
   sfx.boom(); shake(0.5);
-  for (const t of liveTargets()) {
+  for (const t of liveTargets().concat(world.breakables.filter(c => c.alive))) {
     const d = Math.hypot(t.pos.x - pos.x, t.pos.z - pos.z) - t.radius;
-    if (d < radius) t.hit(damage * (1 - Math.max(0, d) / radius * 0.5), { element, from: pos });
+    if (d < radius) t.hit(damage * (1 - Math.max(0, d) / radius * 0.5), { element, from: pos, heavy: true });
   }
   smashNear(pos, radius * 0.25);
 }
@@ -85,7 +86,7 @@ export function updateShots(dt) {
     if (s.kind === 'rocket' && Math.random() < 0.7) smoke(s.m.position.clone(), 1, 0.6, 0xd8d2c8, 0.1, 1);
     let done = s.life <= 0 || s.m.position.y < 0;
     let hitSomething = false;
-    const list = s.hostile ? hostileTargets() : liveTargets();
+    const list = s.hostile ? hostileTargets() : liveTargets().concat(world.breakables.filter(c => c.alive && c.pos.distanceToSquared(s.m.position) < 400));
     for (const t of list) {
       const c = new V3(t.pos.x, t.pos.y + t.aimY, t.pos.z);
       if (!segmentHitsSphere(s.prev, s.m.position, c, t.radius)) continue;

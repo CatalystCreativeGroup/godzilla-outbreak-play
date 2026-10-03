@@ -4,7 +4,7 @@
 export const GAME = {
   hero:  { name: 'JOSEPH', hearts: 6, speed: 9, jump: 10, range: 26, maxArmor: 6 },
   kong:  { name: 'KING KONG', seconds: 18, speed: 13, punchDamage: 10, punchRange: 11, roarStun: 2.5, roarCooldown: 8 },
-  army:  { maxSize: 10, hearts: 4, range: 22, fireRate: 0.55, damage: 1, getUpSeconds: 6 },
+  army:  { maxSize: 15, hearts: 4, range: 22, fireRate: 0.55, damage: 1, getUpSeconds: 6 },
   power: { perMonster: 5, perPerson: 8, perZapOnBoss: 0.5 },
   loot:  { dropChance: 0.4 },
   monsters: { lizardHp: 3, spitterHp: 4, bruteHp: 14, speed: 4.2, aggroRange: 16 },
@@ -24,36 +24,4 @@ export const WEAPONS = {
 export const MAX_WEAPON_LEVEL = 5;
 export const MAX_RATE_LEVEL = 5;
 
-/* The cities. Each camp has monster guards and people to free. */
-export const CITIES = [
-  {
-    id: 'starter', name: 'STARTER CITY', theme: 'day', unlocks: ['rifle', 'shotgun'],
-    camps: [{ guards: 3, people: 2 }, { guards: 4, people: 2 }, { guards: 5, people: 3 }],
-    roamers: 5, monsterTypes: ['lizard'],
-    boss: { id: 'baby', name: 'BABY GODZILLA', health: 260, speed: 5, size: 1, tint: null, element: 'normal', reward: 'GROUND POUND' },
-  },
-  {
-    id: 'downtown', name: 'DOWNTOWN', theme: 'golden', unlocks: ['bazooka'],
-    camps: [{ guards: 5, people: 2 }, { guards: 6, people: 3 }, { guards: 7, people: 3 }],
-    roamers: 7, monsterTypes: ['lizard', 'lizard', 'spitter'],
-    boss: { id: 'kid', name: 'KID GODZILLA', health: 420, speed: 5.5, size: 1.35, tint: 0x9fb39a, element: 'normal', reward: 'KONG THROW' },
-  },
-  {
-    id: 'harbor', name: 'HARBOR CITY', theme: 'harbor', unlocks: ['lightning'],
-    camps: [{ guards: 6, people: 3 }, { guards: 7, people: 3 }, { guards: 8, people: 3 }, { guards: 8, people: 3 }],
-    roamers: 8, monsterTypes: ['lizard', 'spitter', 'brute'],
-    boss: { id: 'adult', name: 'ADULT GODZILLA', health: 620, speed: 6, size: 1.7, tint: 0x7fa9d6, element: 'water', reward: 'WATER ARMOR' },
-  },
-  {
-    id: 'volcano', name: 'VOLCANO CITY', theme: 'volcano', unlocks: ['freeze'],
-    camps: [{ guards: 7, people: 3 }, { guards: 8, people: 3 }, { guards: 9, people: 4 }, { guards: 10, people: 4 }],
-    roamers: 10, monsterTypes: ['lizard', 'spitter', 'brute', 'brute'],
-    boss: { id: 'grandpa', name: 'GRANDPA GODZILLA', health: 860, speed: 6.2, size: 2.1, tint: 0xd9886a, element: 'lava', reward: 'FIRE FISTS' },
-  },
-  {
-    id: 'final', name: 'FINAL BATTLE', theme: 'storm', unlocks: [],
-    camps: [{ guards: 9, people: 3 }, { guards: 10, people: 4 }, { guards: 12, people: 4 }],
-    roamers: 12, monsterTypes: ['lizard', 'spitter', 'brute'],
-    boss: { id: 'max', name: 'MAX GODZILLA', health: 1300, speed: 6.6, size: 2.5, tint: 0xb08ad6, element: 'all', reward: 'KONG FOREVER' },
-  },
-];
+/* The 20 levels live in levels.js. */

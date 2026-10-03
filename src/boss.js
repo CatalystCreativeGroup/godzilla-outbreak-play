@@ -1,13 +1,16 @@
-// The Godzilla boss of each city: falls from the sky, bites, stomps shockwaves, charges, and (bigger ones) breathes.
+// Each level's Godzilla boss: falls from the sky, bites, stomps shockwaves, charges, and uses its own special power
+// (breath, frost, lightning strikes, missiles, teleporting, summoning minions).
 import * as THREE from 'three';
 import { scene } from './engine.js';
 import { GAME } from './settings.js';
 import { spawnModel, setGlow, disposeModel } from './models.js';
-import { smashNear } from './city.js';
+import { smashNear, openSpotNear, groundAt, EDGE } from './map.js';
+import { WEAKNESS } from './levels.js';
+import { spawnEnemy } from './enemies.js';
 import { spit } from './weapons.js';
 import { addPower } from './hero.js';
 import { sfx, say } from './audio.js';
-import { addRing, shake, smoke, burstDebris, sparks, popWord, ember } from './fx.js';
+import { addRing, shake, smoke, burstDebris, sparks, popWord, ember, bolt, fireball } from './fx.js';
 import { wordTexture } from './textures.js';
 import { V3, rnd, clamp, world, P, flatDist, angleTo, turnToward } from './world.js';
 
@@ -15,8 +18,7 @@ let model = null, cfg = null;
 const B = { pos: new V3(), y: 0, vy: 0, hp: 1, max: 1, face: 0, mode: 'hidden', t: 0, biteCd: 1, stompCd: 4, chargeCd: 9, breathCd: 6, chargeDir: new V3(), hitThisCharge: false, stun: 0, mad: false, flash: 0, target: null };
 export const bossState = B;
 
-const BREATH_COLORS = { normal: 0x9dff4a, water: 0x5ac8ff, lava: 0xff7a2a, all: 0xc77dff };
-const WEAKNESS = { water: 'shock', lava: 'ice' };
+const BREATH_COLORS = { normal: 0x9dff4a, water: 0x5ac8ff, lava: 0xff7a2a, all: 0xc77dff, ice: 0xbfe8ff, swamp: 0x7fa83a, mecha: 0xff3a2a, thunder: 0xfff27a, shadow: 0xb06aff };
 
 const stunStars = new THREE.Group();
 for (let i = 0; i < 4; i++) {
@@ -36,12 +38,12 @@ export const bossTarget = {
 
 export function setupBoss(bossCfg) {
   if (model) disposeModel(model);
-  cfg = bossCfg;
-  model = spawnModel('godzilla', { tint: cfg.tint, sizeMul: cfg.size });
+  cfg = { speed: 4.6 + 0.7 * (bossCfg.size || 1), ...bossCfg };
+  model = spawnModel(cfg.model || 'godzilla', { tint: cfg.tint ?? null, sizeMul: cfg.size });
   model.root.visible = false;
   scene.add(model.root);
   const hp = Math.round(cfg.health * GAME.difficulty);
-  Object.assign(B, { hp, max: hp, mode: 'hidden', t: 0, y: 0, vy: 0, stun: 0, mad: false, biteCd: 1, stompCd: 4, chargeCd: 9, breathCd: 6 });
+  Object.assign(B, { hp, max: hp, mode: 'hidden', t: 0, y: 0, vy: 0, stun: 0, mad: false, biteCd: 1, stompCd: 4, chargeCd: 9, breathCd: 5 });
   bossTarget.aimY = 4.2 * cfg.size;
   bossTarget.radius = 2.8 * cfg.size;
   world.bossTarget = null;
@@ -49,8 +51,9 @@ export function setupBoss(bossCfg) {
 
 export function bossArrives() {
   B.mode = 'falling'; B.y = 70; B.vy = 0;
-  B.pos.set(0, 0, -4);
-  if (flatDist(P.pos, B.pos) < 12) B.pos.set(0, 0, P.pos.z < 0 ? 12 : -12);
+  // land in an open spot close to Joseph, wherever he is on the map
+  const a = Math.random() * Math.PI * 2;
+  B.pos.copy(openSpotNear(P.pos.x + Math.cos(a) * 28, P.pos.z + Math.sin(a) * 28, 12, 3 * cfg.size));
   B.face = angleTo(B.pos, P.pos);
   model.root.visible = true;
   world.bossTarget = bossTarget;
@@ -60,7 +63,7 @@ export function bossArrives() {
 
 function damageBoss(d, { element = null, kong = false, knock = 0, from = null } = {}) {
   if (B.hp <= 0 || !bossTarget.alive) return;
-  const weak = WEAKNESS[cfg.element] && element === WEAKNESS[cfg.element];
+  const weak = !!WEAKNESS[cfg.element] && element === WEAKNESS[cfg.element];
   const mul = weak ? 2 : cfg.element === 'all' && element ? 1.3 : 1;
   B.hp -= d * mul; B.flash = 0.08;
   if (weak && Math.random() < 0.15) popWord('SUPER!', new V3(B.pos.x, 10 * cfg.size, B.pos.z), '#7fe0ff', 4);
@@ -93,8 +96,9 @@ function chooseTarget() {
   return best;
 }
 
+const heroReachable = () => P.ko <= 0 && P.y < 4 && !(P.vehicle && P.vehicle.alt > 6);
 function hurtNear(center, range, n) {
-  if (P.ko <= 0 && flatDist(P.pos, center) < range + (P.kong ? 3 : 0)) world.hurtPlayer(n);
+  if (heroReachable() && flatDist(P.pos, center) < range + (P.kong ? 3 : 0)) world.hurtPlayer(n);
   for (const a of world.allies) if (a.alive && flatDist(a.pos, center) < range) a.hurt(n);
 }
 
@@ -122,6 +126,58 @@ function breathe(target) {
     }, i * 110);
   }
 }
+
+/* ---------- special powers ---------- */
+const warnGeo = new THREE.RingGeometry(2.4, 3, 32).rotateX(-Math.PI / 2);
+function strikeAt(pos, delay) {
+  const ring = new THREE.Mesh(warnGeo, new THREE.MeshBasicMaterial({ color: 0xfff27a, transparent: true, opacity: 0.8, toneMapped: false, depthWrite: false }));
+  ring.position.set(pos.x, groundAt(pos.x, pos.z, 999) + 0.1, pos.z);
+  scene.add(ring);
+  setTimeout(() => {
+    scene.remove(ring); ring.material.dispose();
+    if (B.mode === 'dead' || world.state !== 'boss') return;
+    bolt(new V3(pos.x, 60, pos.z), new V3(pos.x, ring.position.y, pos.z), 0xfff6b0);
+    fireball(new V3(pos.x, ring.position.y + 1, pos.z), 3);
+    sfx.lightning(); shake(0.4);
+    hurtNear(new V3(pos.x, 0, pos.z), 3.2, 1);
+  }, delay);
+}
+
+const SPECIALS = {
+  breath: t => breathe(t),
+  frost(t) {
+    breathe(t);
+    if (flatDist(P.pos, B.pos) < 30 && !P.kong) { P.slowT = 2.5; popWord('BRRR!', new V3(P.pos.x, P.y + 3, P.pos.z), '#bfe8ff', 2.6); }
+  },
+  lightning(t) {
+    const spots = [t.pos.clone(), P.pos.clone(), ...world.allies.filter(a => a.alive).slice(0, 3).map(a => a.pos.clone())];
+    spots.forEach((p, i) => strikeAt(p.add(new V3(rnd(-1.5, 1.5), 0, rnd(-1.5, 1.5))), 1100 + i * 150));
+  },
+  missiles(t) {
+    const top = new V3(B.pos.x, 8 * cfg.size, B.pos.z);
+    for (let i = 0; i < 8; i++) setTimeout(() => {
+      if (B.mode === 'dead' || world.state !== 'boss') return;
+      spit(top, t.pos.clone().add(new V3(rnd(-6, 6), 0, rnd(-6, 6))), 1, 0xff3a2a, 18);
+    }, i * 120);
+  },
+  teleport(t) {
+    smoke(B.pos.clone().setY(3), 12, 4, 0x2a1a33, 4, 1.6);
+    const behind = new V3(-Math.sin(P.yaw), 0, -Math.cos(P.yaw)).multiplyScalar(9);
+    B.pos.copy(openSpotNear(t.pos.x + behind.x, t.pos.z + behind.z, 6, 2 * cfg.size));
+    B.face = angleTo(B.pos, t.pos);
+    smoke(B.pos.clone().setY(3), 12, 4, 0x2a1a33, 4, 1.6);
+    popWord('BEHIND YOU!', new V3(B.pos.x, 10 * cfg.size, B.pos.z), '#b06aff', 4);
+    B.biteCd = 0.3;
+  },
+  summon() {
+    const near = world.enemies.filter(e => e.alive && flatDist(e.pos, B.pos) < 30).length;
+    for (let i = 0; i < Math.max(0, 5 - near); i++) {
+      const a = rnd(0, Math.PI * 2);
+      spawnEnemy(i % 2 ? 'jumper' : 'lizard', openSpotNear(B.pos.x + Math.cos(a) * 7, B.pos.z + Math.sin(a) * 7, 3, 1));
+    }
+    smoke(B.pos.clone().setY(1), 10, 3, 0x4a5a2a, 6, 2);
+  },
+};
 
 export function updateBoss(dt) {
   if (!model || B.mode === 'hidden') return;
@@ -184,14 +240,14 @@ function think(dt, s) {
       model.anim.play('walk', { speed: 0.9 * (B.mad ? 1.3 : 1) });
     } else model.anim.hold('walk', 0.3);
     if (dist < reach + 1 && B.biteCd <= 0) { B.mode = 'bite'; B.t = 0; B.target = target; model.anim.once('bite', { speed: 1.2 }); }
-    else if (B.breathCd <= 0 && cfg.element !== 'normal' && dist > 9 && dist < 34) { B.mode = 'breath'; B.t = 0; B.target = target; model.anim.once('roar', { speed: 1.6 }); }
+    else if (B.breathCd <= 0 && cfg.special && dist > 7 && dist < 40) { B.mode = 'breath'; B.t = 0; B.target = target; model.anim.once('roar', { speed: 1.6 }); }
     else if (B.stompCd <= 0 && dist < 28) { B.mode = 'stomp'; B.t = 0; }
     else if (B.chargeCd <= 0 && dist > 10) { B.mode = 'charge'; B.t = 0; B.chargeDir.copy(toT).normalize(); B.hitThisCharge = false; }
   } else if (B.mode === 'bite') {
     if (B.t >= 0.5 && B.t - dt < 0.5) { hurtNear(B.pos.clone().addScaledVector(new V3(Math.sin(B.face), 0, Math.cos(B.face)), 3 * s), 4 * s, 1); sfx.hit(); }
     if (B.t > 1.0) { B.mode = 'walk'; B.t = 0; B.biteCd = B.mad ? 1.1 : 1.7; }
   } else if (B.mode === 'breath') {
-    if (B.t >= 0.4 && B.t - dt < 0.4 && B.target) breathe(B.target);
+    if (B.t >= 0.4 && B.t - dt < 0.4 && B.target) (SPECIALS[cfg.special] || breathe)(B.target);
     if (B.t > 1.3) { B.mode = 'walk'; B.t = 0; B.breathCd = B.mad ? rnd(4, 6) : rnd(6, 9); }
   } else if (B.mode === 'stomp') {
     model.anim.hold('walk', 0.25);
@@ -208,12 +264,12 @@ function think(dt, s) {
       model.anim.play('walk', { speed: 2.2 });
       B.pos.addScaledVector(B.chargeDir, (B.mad ? 26 : 21) * dt);
       smashNear(B.pos, 3.4 * s);
-      if (!B.hitThisCharge && P.ko <= 0 && flatDist(B.pos, P.pos) < (P.kong ? 6 : 3.5) * Math.max(1, s * 0.7)) { B.hitThisCharge = true; world.hurtPlayer(1); }
+      if (!B.hitThisCharge && heroReachable() && flatDist(B.pos, P.pos) < (P.kong ? 6 : 3.5) * Math.max(1, s * 0.7)) { B.hitThisCharge = true; world.hurtPlayer(1); }
       for (const a of world.allies) if (a.alive && flatDist(B.pos, a.pos) < 3.5 * s) a.hurt(1);
       if (Math.random() < 0.5) smoke(new V3(B.pos.x, 0.5, B.pos.z), 1, 2, 0xb7ab98, 1, 1.2);
     } else { B.mode = 'walk'; B.t = 0; B.chargeCd = B.mad ? rnd(6, 8) : rnd(9, 12); }
   }
-  B.pos.x = clamp(B.pos.x, -96, 96); B.pos.z = clamp(B.pos.z, -96, 96);
+  B.pos.x = clamp(B.pos.x, -EDGE + 10, EDGE - 10); B.pos.z = clamp(B.pos.z, -EDGE + 10, EDGE - 10);
   // don't stand inside the hero
   const minD = (P.kong ? 6.5 : 3.4) + (s - 1) * 2, d = flatDist(P.pos, B.pos);
   if (d < minD && d > 0.01) P.pos.add(P.pos.clone().sub(B.pos).setY(0).normalize().multiplyScalar(minD - d));

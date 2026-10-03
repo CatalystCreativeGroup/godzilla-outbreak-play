@@ -21,12 +21,15 @@ export function turnToward(current, target, rate) {
 export const world = {
   state: 'title',      // title | intro | mission | bossIntro | boss | win | ending
   time: 0,
-  cityIndex: 0,
-  city: null,          // settings for the current city
+  levelIndex: 0,
+  level: null,         // settings for the current level (see levels.js)
+  vehicles: [],        // cars, tanks and jets (see vehicles.js)
   enemies: [],         // monsters (see enemies.js)
   allies: [],          // Joseph's army (see allies.js)
   camps: [],           // hostage camps (see missions.js)
   pickups: [],         // loot on the ground (see loot.js)
+  breakables: [],      // crates and barrels (see crates.js)
+  nests: [],           // monster nests and bases (see nests.js)
   campsFreed: 0,
   view: 'first',       // first | outside (camera), switched with the VIEW button
   aimTarget: null,     // what the crosshair is on (for the red crosshair)
@@ -39,7 +42,7 @@ export const P = {
   power: 0, kong: false, kongT: 0, morphT: 0,
   fireCd: 0, aimT: 0, punchCd: 0, punchT: 0, roarCd: 0, roarT: 0, readyToldYou: false,
   moving: 0,
-  yaw: Math.PI, pitch: 0, firing: false, recoil: 0,
+  yaw: Math.PI, pitch: 0, firing: false, fireQueued: false, recoil: 0,
 };
 
 /* What Joseph owns. Saved between visits. */
@@ -48,8 +51,9 @@ export const loadout = {
   current: 'blaster',
   levels: { blaster: 1 },
   rateLevel: 1,
+  fullAuto: {},        // weapon id -> true once a FULL AUTO pickup is found
   kongPowers: [],
-  citiesBeaten: [],
+  levelsBeaten: [],     // level numbers (1-20) already won
 };
 
 export function playing() {

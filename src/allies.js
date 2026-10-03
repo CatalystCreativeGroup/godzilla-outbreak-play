@@ -2,8 +2,8 @@
 import * as THREE from 'three';
 import { scene } from './engine.js';
 import { GAME } from './settings.js';
-import { spawnModel } from './models.js';
-import { collide, blocked } from './city.js';
+import { spawnModel, inView } from './models.js';
+import { collide, blocked } from './map.js';
 import { fireWeapon, nearestTarget, makeGun, teamMul } from './weapons.js';
 import { sfx } from './audio.js';
 import { sparks, popWord } from './fx.js';
@@ -29,7 +29,8 @@ export function updateHostages(list, dt) {
   for (const h of list) {
     h.help.position.y = 3.6 + Math.sin(world.time * 4 + h.pos.x) * 0.15;
     h.model.root.rotation.y = turnToward(h.model.root.rotation.y, angleTo(h.pos, P.pos), dt * 2);
-    if (flatDist(h.pos, P.pos) < 95) h.model.anim.update(dt);
+    h.model.root.visible = inView(h.pos, 2.5);
+    if (h.model.root.visible) h.model.anim.update(dt);
   }
 }
 
@@ -56,7 +57,7 @@ export function recruit(h) {
   const gun = makeGun('rifle', 1.1);
   scene.add(gun);
   const ally = {
-    model: h.model, pos: h.pos.clone(), face: h.model.root.rotation.y, gun,
+    model: h.model, pos: h.pos.clone().setY(0), face: h.model.root.rotation.y, gun,
     hp: GAME.army.hearts, downT: 0, fireCd: rnd(0, 0.5), aimT: 0, slot: world.allies.length, aimY: 1.3, radius: 0.9,
     get alive() { return this.downT <= 0; },
     hurt(n) { hurtAlly(ally, n); },
@@ -105,6 +106,7 @@ function updateAlly(a, i, dt) {
     return;
   }
   a.fireCd -= dt; a.aimT -= dt;
+  if (flatDist(a.pos, P.pos) > 70) a.pos.copy(slotPosition(i)); // they catch up (by bus!)
   const hand = a.model.bones.RightHand;
   if (hand) hand.getWorldPosition(handPos); else handPos.set(a.pos.x, 1.3, a.pos.z);
   const slot = slotPosition(i);
@@ -138,11 +140,12 @@ function updateAlly(a, i, dt) {
   else a.model.anim.hold('shoot', 0.05);
   root.position.set(a.pos.x, 0, a.pos.z);
   root.rotation.y = a.face;
-  a.model.anim.update(dt);
+  root.visible = inView(a.pos, 2.5);
+  if (root.visible) a.model.anim.update(dt);
   if (hand) hand.getWorldPosition(handPos); else handPos.set(a.pos.x, 1.3, a.pos.z);
   a.gun.position.copy(handPos);
   a.gun.rotation.set(0, a.face, 0);
-  a.gun.visible = true;
+  a.gun.visible = root.visible;
 }
 
 export function updateAllies(dt) {
@@ -173,4 +176,14 @@ export function clearAllies() {
 /* Re-create saved soldiers when a game is continued. */
 export function restoreArmy(count) {
   for (let i = 0; i < count; i++) recruit(spawnHostage(P.pos.clone()));
+}
+
+/* "+2 SOLDIERS" pickups: new soldiers run in beside Joseph. Returns how many joined. */
+export function spawnSoldiers(n) {
+  let joined = 0;
+  for (let i = 0; i < n && world.allies.length < GAME.army.maxSize; i++) {
+    const a = Math.random() * Math.PI * 2;
+    if (recruit(spawnHostage(new V3(P.pos.x + Math.cos(a) * 3, 0, P.pos.z + Math.sin(a) * 3)))) joined++;
+  }
+  return joined;
 }

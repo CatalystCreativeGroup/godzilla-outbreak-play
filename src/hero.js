@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import { scene, camera } from './engine.js';
 import { GAME, WEAPONS } from './settings.js';
 import { spawnModel, disposeGroup } from './models.js';
-import { collide, smashNear } from './city.js';
+import { collide, smashNear, groundAt, EDGE } from './map.js';
+import { breakNear } from './crates.js';
 import { fireWeapon, liveTargets, aimPoint, makeGun, gunMuzzle, rateMul } from './weapons.js';
 import { defeatEnemy } from './enemies.js';
 import { sfx, say } from './audio.js';
@@ -16,9 +17,11 @@ const handPos = new V3();
 export const EYE = 2.05;
 
 /* What monsters see when they attack Joseph. */
+const heroPos = new V3();
 export const heroVictim = {
-  pos: P.pos, aimY: 1.2, radius: 0.9,
-  get alive() { return P.ko <= 0 && P.morphT <= 0; },
+  get pos() { return heroPos.set(P.pos.x, P.y, P.pos.z); }, aimY: 1.2, radius: 0.9,
+  get elev() { return P.y; },
+  get alive() { return P.ko <= 0 && P.morphT <= 0 && !P.vehicle; },
   hurt: n => hurtPlayer(n),
 };
 
@@ -48,7 +51,7 @@ export function equipGun() {
 
 export function resetHero(start) {
   Object.assign(P, {
-    y: 0, vy: 0, face: Math.PI, yaw: Math.PI, pitch: 0, hearts: GAME.hero.hearts, inv: 0, ko: 0, power: 0, kong: false, kongT: 0, morphT: 0,
+    y: 0, vy: 0, onGround: true, climb: null, parachute: false, slowT: 0, vehicle: null, face: Math.PI, yaw: Math.PI, pitch: 0, hearts: GAME.hero.hearts, inv: 0, ko: 0, power: 0, kong: false, kongT: 0, morphT: 0,
     fireCd: 0, aimT: 0, punchCd: 0, punchT: 0, roarCd: 0, roarT: 0, readyToldYou: false, firing: false, recoil: 0,
   });
   P.pos.copy(start);
@@ -57,11 +60,11 @@ export function resetHero(start) {
   equipGun();
 }
 
-export const firstPerson = () => world.view === 'first' && !P.kong && world.state !== 'title';
+export const firstPerson = () => world.view === 'first' && !P.kong && !P.vehicle && world.state !== 'title';
 
 /* ---------- actions ---------- */
 export function heroJump() {
-  if (!playing() || P.kong || P.ko > 0 || P.morphT > 0 || P.y > 0.05) return;
+  if (!playing() || P.kong || P.ko > 0 || P.morphT > 0 || !P.onGround || P.climb || P.vehicle) return;
   P.vy = GAME.hero.jump; sfx.jump();
 }
 
@@ -76,7 +79,7 @@ export function addPower(n) {
 }
 
 export function tryMorph() {
-  if (!playing() || P.kong || P.power < 100 || P.ko > 0 || P.morphT > 0) return;
+  if (!playing() || P.kong || P.vehicle || P.climb || P.power < 100 || P.ko > 0 || P.morphT > 0) return;
   P.morphT = 1.1; P.inv = 99;
   sfx.morph(); world.flash?.();
 }
@@ -84,7 +87,7 @@ export function tryMorph() {
 function kongSeconds() { return GAME.kong.seconds + (loadout.kongPowers.includes('WATER ARMOR') ? 6 : 0); }
 
 function finishMorph() {
-  P.kong = true; P.kongT = kongSeconds(); P.power = 0; P.y = 0; P.vy = 0;
+  P.kong = true; P.kongT = kongSeconds(); P.power = 0; P.y = 0; P.vy = 0; P.climb = null;
   joseph.root.visible = false; handGun.visible = false; viewGun.visible = false; kong.root.visible = true;
   sparks(new V3(P.pos.x, 4, P.pos.z), 0xffd23f, 30, 16, 0.8);
   addRing(P.pos, 18, 0xffd23f);
@@ -112,6 +115,7 @@ export function kongPunch() {
   const fist = P.pos.clone().addScaledVector(fwd, 5);
   sfx.punch();
   const fire = loadout.kongPowers.includes('FIRE FISTS');
+  breakNear(fist, 4);
   let hitSomething = smashNear(fist, 3) > 0;
   const boss = world.bossTarget;
   if (boss && boss.alive && flatDist(P.pos, boss.pos) < GAME.kong.punchRange + boss.radius * 0.3) {
@@ -206,14 +210,45 @@ function shoot() {
 }
 
 /* ---------- per-frame ---------- */
+/* Climb a ladder to the roof (started from the action button). */
+export function startClimb(b) {
+  if (P.vehicle || P.kong || P.climb) return;
+  P.climb = b; P.vy = 0;
+  P.yaw = P.face = Math.atan2(0, -b.ladder.nz);
+  sfx.jump();
+}
+function updateClimb(dt) {
+  const b = P.climb, L = b.ladder;
+  P.pos.set(L.x, 0, L.z + L.nz * 0.3);
+  P.y += 4.5 * dt;
+  joseph.anim.play('run', { speed: 0.6 });
+  if (!b.alive) { P.climb = null; return; }
+  if (P.y >= b.h) {
+    P.y = b.h; P.climb = null; P.onGround = true;
+    P.pos.set(L.x, 0, L.z - L.nz * 1.8); // step onto the roof
+    world.banner?.('ON THE ROOF!', 1200);
+  }
+}
+
+/* Gravity: stand on the street or on a roof; walking off a roof drops you down (no damage). */
+function updateFalling(dt) {
+  const ground = groundAt(P.pos.x, P.pos.z, P.y);
+  P.vy -= (P.parachute ? 5 : 28) * dt;
+  if (P.parachute) P.vy = Math.max(P.vy, -4.5);
+  P.y += P.vy * dt;
+  P.onGround = P.y <= ground + 0.02;
+  if (P.onGround) { P.y = ground; P.vy = 0; if (P.parachute) { P.parachute = false; sfx.jump(); } }
+}
+
 function updateJoseph(dt, inp) {
-  P.vy -= 28 * dt; P.y += P.vy * dt;
-  if (P.y <= 0) { P.y = 0; P.vy = 0; }
+  if (P.climb) updateClimb(dt); else updateFalling(dt);
   P.fireCd -= dt; P.aimT -= dt;
   P.recoil = Math.max(0, P.recoil - dt * 6);
   P.kick = Math.max(0, (P.kick || 0) - dt * 0.6);
   world.aimTarget = findAimTarget(eyePoint(), aimDirection(), WEAPONS[loadout.current].range);
-  if (playing() && P.firing && P.fireCd <= 0) shoot();
+  // semi-auto: one shot per tap; with FULL AUTO, holding FIRE keeps shooting
+  const auto = loadout.fullAuto[loadout.current];
+  if (playing() && P.fireCd <= 0 && (auto ? P.firing : P.fireQueued)) { shoot(); P.fireQueued = false; }
 
   const moving = inp.l > 0.12;
   if (P.y > 0.1) { /* keep the current pose in the air */ }
@@ -287,13 +322,17 @@ export function updateHero(dt, inp) {
   // the stick moves relative to where you're looking: up = forward, sideways = step left/right
   const fwdX = Math.sin(P.yaw), fwdZ = Math.cos(P.yaw), rightX = -Math.cos(P.yaw), rightZ = Math.sin(P.yaw);
   const mx = fwdX * -inp.z + rightX * inp.x, mz = fwdZ * -inp.z + rightZ * inp.x;
-  const spd = P.kong ? GAME.kong.speed : GAME.hero.speed;
+  if (P.vehicle) { joseph.root.visible = false; handGun.visible = false; viewGun.visible = false; return; }
+  if (P.climb) { updateJoseph(dt, { x: 0, z: 0, l: 0 }); return; }
+  P.slowT = Math.max(0, (P.slowT || 0) - dt);
+  const spd = (P.kong ? GAME.kong.speed : GAME.hero.speed) * (P.slowT > 0 ? 0.5 : 1) * (P.parachute ? 0.6 : 1);
   P.moving = inp.l;
   P.pos.x += mx * spd * dt; P.pos.z += mz * spd * dt;
   if (P.kong) {
-    P.pos.x = clamp(P.pos.x, -98, 98); P.pos.z = clamp(P.pos.z, -98, 98);
+    P.pos.x = clamp(P.pos.x, -EDGE, EDGE); P.pos.z = clamp(P.pos.z, -EDGE, EDGE);
     if (inp.l > 0.1) smashNear(P.pos, 3.2);
-  } else collide(P.pos, 0.5);
+    breakNear(P.pos, 3.5);
+  } else collide(P.pos, 0.5, P.y);
 
   // Joseph faces where he aims; Kong also turns toward a close boss so punches land
   let wantFace = P.yaw;
