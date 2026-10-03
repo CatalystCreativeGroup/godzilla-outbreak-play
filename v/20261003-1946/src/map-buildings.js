@@ -81,7 +81,8 @@ export function buildBuildingMeshes(group, buildings) {
     const key = `${Math.floor(b.cx / CHUNK)},${Math.floor(b.cz / CHUNK)}`;
     if (!buckets.has(key)) buckets.set(key, { styles: {}, all: [] });
     const bucket = buckets.get(key);
-    (bucket.styles[b.style] ||= []).push(b);
+    if (!bucket.styles[b.style]) bucket.styles[b.style] = []; // (older iPads can't read `||=`)
+    bucket.styles[b.style].push(b);
     bucket.all.push(b);
   }
   for (const bucket of buckets.values()) {
