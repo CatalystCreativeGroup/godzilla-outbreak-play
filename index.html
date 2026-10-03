@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Godzilla Outbreak</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Nunito:wght@700;900&display=swap">
+<style>
+/* Layout: full-screen 3D view; a tactical glass HUD on top; thumbs-first controls in the bottom corners. */
+:root {
+  --ink: #0d1014;
+  --glass: rgba(14, 18, 22, .62);
+  --edge: rgba(255, 255, 255, .16);
+  --text: #f4f1ea;
+  --muted: #b9b4a8;
+  --toxic: #9dff4a;
+  --gold: #ffc23d;
+  --kong: #ffb020;
+  --danger: #ff4d4d;
+  --shield: #5a8cff;
+  --display: "Russo One", "Arial Black", Impact, sans-serif;
+  --body: "Nunito", "Trebuchet MS", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; overflow: hidden; background: #0d1014; }
+[hidden] { display: none !important; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+#app { position: fixed; inset: 0; touch-action: none; font-family: var(--body); color: var(--text); overflow: hidden; }
+#c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.glass { background: var(--glass); border: 1px solid var(--edge); border-radius: 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, .35); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+
+/* ---------- HUD ---------- */
+.hud-top {
+  position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;
+  padding: calc(env(safe-area-inset-top, 0px) + 12px) calc(env(safe-area-inset-right, 0px) + 16px) 0 calc(env(safe-area-inset-left, 0px) + 16px);
+  pointer-events: none; z-index: 3;
+}
+#hero-box { padding: 8px 12px; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.hero-name { font-family: var(--display); font-size: 15px; letter-spacing: .08em; line-height: 1; color: var(--muted); }
+#hearts, #armor { display: flex; gap: 3px; line-height: 1; min-height: 4px; flex-wrap: wrap; max-width: 220px; }
+#hearts i, #armor i { font-style: normal; font-size: 20px; }
+#hearts i::before { content: '❤️'; }
+#hearts i.off { opacity: .2; filter: grayscale(1); }
+#armor i::before { content: '🛡️'; font-size: 16px; }
+.meter { display: flex; align-items: center; gap: 7px; }
+.meter .ic { font-size: 20px; line-height: 1; }
+.meter .bar { width: min(30vw, 190px); height: 12px; border-radius: 7px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #c76a00, var(--kong)); transition: width .15s; }
+.meter.ready i { animation: glow .5s infinite alternate; }
+.meter.kong i { background: linear-gradient(90deg, #ff9d00, #ffe98a); }
+@keyframes glow { from { filter: brightness(1); } to { filter: brightness(1.6); } }
+
+.center-top { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; }
+#mission { font-family: var(--display); font-size: 20px; display: flex; gap: 16px; padding: 8px 14px; line-height: 1; }
+#mission span { display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+#mission .ic { font-size: 20px; }
+#mission .done { color: var(--toxic); }
+#boss-bar { width: min(52vw, 440px); text-align: center; padding: 8px 12px; }
+#boss-bar .name { font-family: var(--display); font-size: 16px; letter-spacing: .08em; color: var(--toxic); line-height: 1; }
+#boss-bar.mad .name { color: var(--danger); }
+#boss-bar .bar { height: 14px; border-radius: 8px; background: rgba(255, 255, 255, .12); overflow: hidden; margin-top: 6px; }
+#boss-fill { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #c4161c, #ff7a2a); transition: width .2s; }
+.top-btns { display: flex; gap: 8px; }
+.round { pointer-events: auto; width: 50px; height: 50px; font-size: 22px; border-radius: 50%; cursor: pointer; color: var(--text); padding: 0; }
+#crosshair { position: absolute; left: 50%; top: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; pointer-events: none; }
+#crosshair i { position: absolute; background: rgba(255, 255, 255, .9); box-shadow: 0 0 2px #000; }
+#crosshair i:nth-child(1), #crosshair i:nth-child(2) { width: 2px; height: 9px; left: 16px; }
+#crosshair i:nth-child(1) { top: 0; } #crosshair i:nth-child(2) { bottom: 0; }
+#crosshair i:nth-child(3), #crosshair i:nth-child(4) { height: 2px; width: 9px; top: 16px; }
+#crosshair i:nth-child(3) { left: 0; } #crosshair i:nth-child(4) { right: 0; }
+#crosshair b { position: absolute; left: 15px; top: 15px; width: 4px; height: 4px; border-radius: 50%; background: #fff; box-shadow: 0 0 2px #000; }
+#crosshair.on i, #crosshair.on b { background: var(--danger); }
+#crosshair.on { transform: scale(1.15); }
+#compass {
+  position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 112px); width: 36px; height: 36px; margin-left: -18px;
+  display: grid; place-items: center; font-size: 24px; color: var(--gold); text-shadow: 0 2px 4px #000; pointer-events: none;
+}
+#look-zone { position: absolute; right: 0; top: 0; width: 50%; height: 100%; touch-action: none; }
+
+#weapon-chip {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  padding: 6px 14px; text-align: center; pointer-events: none; line-height: 1.1;
+}
+#weapon-name { font-family: var(--display); font-size: 15px; letter-spacing: .06em; }
+#weapon-stars { color: var(--gold); font-size: 14px; letter-spacing: 2px; }
+#weapon-rate { color: #8fdcff; font-size: 13px; font-family: var(--display); }
+
+#banner {
+  position: absolute; left: 16px; right: 16px; top: 24%; text-align: center; font-family: var(--display); font-size: clamp(30px, 6vw, 64px); line-height: 1.05;
+  color: var(--text); text-shadow: 0 3px 0 #000, 0 0 24px rgba(0, 0, 0, .7); pointer-events: none; opacity: 0; transform: scale(.7);
+  transition: opacity .25s, transform .35s cubic-bezier(.2, 1.6, .4, 1); text-wrap: balance;
+}
+#banner.show { opacity: 1; transform: scale(1); }
+#banner small { display: block; font-size: .45em; margin-top: .35em; color: var(--gold); font-family: var(--body); font-weight: 900; }
+#flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity .5s; }
+#flash.on { opacity: .85; transition: none; }
+#hurt { position: absolute; inset: 0; pointer-events: none; opacity: 0; box-shadow: inset 0 0 140px 40px rgba(200, 20, 30, .65); transition: opacity .4s; }
+#hurt.on { opacity: 1; transition: none; }
+
+/* ---------- Controls ---------- */
+#stick-zone { position: absolute; left: 0; bottom: 0; width: 50%; height: 72%; touch-action: none; }
+#stick-base {
+  position: absolute; width: 150px; height: 150px; margin: -75px 0 0 -75px; border-radius: 50%;
+  background: rgba(255, 255, 255, .1); border: 2px solid rgba(255, 255, 255, .45);
+  left: calc(env(safe-area-inset-left, 0px) + 120px); top: calc(100% - 130px - env(safe-area-inset-bottom, 0px)); pointer-events: none;
+}
+#stick-knob { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px; border-radius: 50%; background: rgba(244, 241, 234, .9); box-shadow: 0 4px 14px rgba(0, 0, 0, .5); }
+#pads {
+  position: absolute; right: calc(env(safe-area-inset-right, 0px) + 18px); bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
+  display: grid; grid-template-columns: auto auto; grid-template-areas: "swap a" "morph fire"; gap: 14px; align-items: end; justify-items: center;
+}
+.pad {
+  width: 92px; height: 92px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .35); background: rgba(14, 18, 22, .6); color: var(--text);
+  font-family: var(--display); font-size: 14px; letter-spacing: .05em; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  touch-action: none; cursor: pointer; padding: 0; box-shadow: 0 6px 18px rgba(0, 0, 0, .4); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.pad .ic { font-size: 30px; line-height: 1; }
+.pad.down { transform: scale(.93); background: rgba(255, 255, 255, .2); }
+.pad:focus-visible, .big-btn:focus-visible, #sound-btn:focus-visible, .city-btn:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+#btn-a { grid-area: a; }
+#btn-swap { grid-area: swap; }
+#btn-swap.single { opacity: .45; }
+.pad.fire { grid-area: fire; width: 126px; height: 126px; font-size: 17px; border-color: rgba(255, 90, 70, .8); background: rgba(120, 20, 14, .55); }
+.pad.fire .ic { font-size: 42px; }
+.pad.morph { grid-area: morph; width: 92px; height: 92px; opacity: .55; }
+.pad.morph .ic { filter: grayscale(.8); }
+.pad.morph.ready { opacity: 1; background: var(--kong); color: var(--ink); border-color: #fff; animation: pulse .6s infinite alternate; }
+.pad.morph.ready .ic { filter: none; }
+.pad.cool { opacity: .4; }
+@keyframes pulse { from { transform: scale(1); } to { transform: scale(1.08); box-shadow: 0 0 0 10px rgba(255, 176, 32, .35); } }
+
+/* ---------- Screens ---------- */
+.screen {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  padding: calc(env(safe-area-inset-top, 0px) + 20px) 16px calc(env(safe-area-inset-bottom, 0px) + 20px); text-align: center;
+  background: radial-gradient(ellipse at 50% 40%, rgba(0, 0, 0, .05), rgba(0, 0, 0, .72)); overflow-y: auto;
+}
+.logo { display: flex; flex-direction: column; align-items: center; line-height: .9; }
+.logo .l1 { font-family: var(--display); font-size: clamp(52px, 12vw, 140px); color: #e8f5dc; letter-spacing: .02em; text-shadow: 0 4px 0 #1d3a10, 0 0 40px rgba(157, 255, 74, .45), 0 10px 30px #000; }
+.logo .l2 { font-family: var(--display); font-size: clamp(30px, 6.5vw, 76px); color: var(--gold); letter-spacing: .18em; margin-top: .1em; text-shadow: 0 3px 0 #5a3a00, 0 8px 24px #000; }
+.sub { font-family: var(--display); font-size: clamp(16px, 2.6vw, 22px); color: var(--muted); letter-spacing: .06em; }
+.howto { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: 680px; }
+.howto .glass { font-family: var(--display); font-size: 14px; display: flex; align-items: center; gap: 7px; padding: 7px 12px; }
+.howto b { font-size: 22px; font-weight: 400; }
+.big-btn {
+  font-family: var(--display); font-size: clamp(26px, 4.4vw, 40px); letter-spacing: .08em; padding: 14px 54px; border-radius: 999px;
+  background: linear-gradient(180deg, #ffd56a, #f0a400); color: #1a1200; border: 0; box-shadow: 0 8px 0 #7a5300, 0 14px 30px rgba(0, 0, 0, .5); cursor: pointer; touch-action: manipulation;
+}
+.big-btn:active { transform: translateY(5px); box-shadow: 0 3px 0 #7a5300; }
+.small-btn { font-family: var(--display); font-size: 14px; letter-spacing: .06em; color: var(--muted); background: transparent; border: 1px solid var(--edge); border-radius: 999px; padding: 8px 16px; cursor: pointer; }
+#city-picker { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: 760px; }
+.city-btn { font-family: var(--display); color: var(--text); background: var(--glass); border: 1px solid var(--edge); border-radius: 12px; padding: 8px 12px; display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; letter-spacing: .04em; }
+.city-btn .n { width: 24px; height: 24px; border-radius: 50%; background: rgba(255, 255, 255, .15); display: grid; place-items: center; font-size: 13px; }
+.city-btn.beaten { border-color: rgba(157, 255, 74, .5); }
+.city-btn.beaten .s { color: var(--toxic); }
+.city-btn.locked { opacity: .45; cursor: default; }
+.win-title { font-family: var(--display); font-size: clamp(46px, 10vw, 110px); line-height: .95; color: var(--gold); text-shadow: 0 4px 0 #5a3a00, 0 10px 30px #000; }
+.rewards { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.reward { display: flex; flex-direction: column; gap: 4px; padding: 10px 18px; font-family: var(--display); }
+.reward .k { font-size: 12px; letter-spacing: .14em; color: var(--gold); }
+.reward .v { font-size: 24px; }
+.next { font-family: var(--display); font-size: 16px; color: var(--muted); }
+.load-bar { width: min(60vw, 360px); height: 10px; border-radius: 6px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+#load-fill { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #6aa82e, var(--toxic)); transition: width .3s; }
+@media (max-height: 560px) {
+  .pad { width: 76px; height: 76px; } .pad .ic { font-size: 24px; }
+  .pad.fire { width: 104px; height: 104px; } .pad.morph { width: 76px; height: 76px; }
+  .screen { gap: 10px; } #weapon-chip { display: none; }
+}
+@media (max-width: 700px) {
+  #mission { font-size: 16px; gap: 10px; padding: 6px 10px; }
+  .hero-name { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pad.morph.ready, .meter.ready i { animation: none; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="c"></canvas>
+
+  <div class="hud-top" id="hud" hidden>
+    <div id="hero-box" class="glass">
+      <div class="hero-name" id="hero-name">JOSEPH</div>
+      <div id="hearts"></div>
+      <div id="armor"></div>
+      <div class="meter" id="meter"><span class="ic">🦍</span><div class="bar"><i id="meter-fill"></i></div></div>
+    </div>
+    <div class="center-top">
+      <div id="mission" class="glass">
+        <span id="m-camps"></span>
+        <span id="m-army"></span>
+      </div>
+      <div id="boss-bar" class="glass" hidden>
+        <div class="name" id="boss-name">BABY GODZILLA</div>
+        <div class="bar"><i id="boss-fill"></i></div>
+      </div>
+    </div>
+    <div class="top-btns">
+      <button id="btn-view" class="glass round" aria-label="Switch between first person and outside view">👁️</button>
+      <button id="sound-btn" class="glass round" aria-label="Sound on or off">🔊</button>
+    </div>
+  </div>
+  <div id="compass" hidden aria-hidden="true">▲</div>
+  <div id="crosshair" hidden aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></div>
+
+  <div id="banner"></div>
+  <div id="hurt"></div>
+  <div id="flash"></div>
+
+  <div id="controls" hidden>
+    <div id="look-zone" aria-hidden="true"></div>
+    <div id="stick-zone"><div id="stick-base"><div id="stick-knob"></div></div></div>
+    <div id="weapon-chip" class="glass"><div id="weapon-name">BLASTER</div><div id="weapon-stars"></div><div id="weapon-rate"></div></div>
+    <div id="pads">
+      <button class="pad" id="btn-swap" aria-label="Switch gun"><span class="ic" id="btn-swap-ic">🔫</span>SWAP</button>
+      <button class="pad" id="btn-a"><span class="ic" id="btn-a-ic">⬆️</span><span id="btn-a-label">JUMP</span></button>
+      <button class="pad morph" id="btn-morph"><span class="ic">🦍</span>MORPH</button>
+      <button class="pad fire" id="btn-fire"><span class="ic" id="btn-fire-ic">🎯</span><span id="btn-fire-label">FIRE</span></button>
+    </div>
+  </div>
+
+  <div class="screen" id="loading">
+    <div class="logo"><span class="l1">GODZILLA</span><span class="l2">OUTBREAK</span></div>
+    <div class="load-bar"><i id="load-fill"></i></div>
+    <div class="sub">Loading the city…</div>
+  </div>
+
+  <div class="screen" id="title" hidden>
+    <div class="logo"><span class="l1">GODZILLA</span><span class="l2">OUTBREAK</span></div>
+    <div class="sub">Joseph vs. the Godzillas</div>
+    <div class="howto">
+      <span class="glass"><b>🕹️</b>Move</span>
+      <span class="glass"><b>👆</b>Drag right side to aim</span>
+      <span class="glass"><b>🎯</b>Hold FIRE</span>
+      <span class="glass"><b>👁️</b>Switch view</span>
+      <span class="glass"><b>🏚️</b>Free the camps</span>
+      <span class="glass"><b>🪖</b>Build your army</span>
+      <span class="glass"><b>🔫</b>Grab new guns</span>
+      <span class="glass"><b>🦍</b>Turn into Kong!</span>
+    </div>
+    <button class="big-btn" id="play-btn">PLAY</button>
+    <div id="city-picker"></div>
+    <button class="small-btn" id="reset-btn">Start over</button>
+  </div>
+
+  <div class="screen" id="win" hidden>
+    <div class="win-title">CITY SAVED!</div>
+    <div class="rewards">
+      <div class="reward glass"><span class="k">NEW KONG POWER</span><span class="v" id="win-reward">GROUND POUND</span></div>
+      <div class="reward glass"><span class="k">YOUR ARMY</span><span class="v">🪖 <span id="win-army">0</span></span></div>
+    </div>
+    <div class="next" id="win-next"></div>
+    <button class="big-btn" id="next-btn">NEXT CITY</button>
+    <button class="small-btn" id="title-btn">Back to cities</button>
+  </div>
+
+  <div class="screen" id="ending" hidden>
+    <div class="win-title">YOU ARE<br>KING KONG!</div>
+    <div class="sub">Max Godzilla is beaten. Joseph and his army protect all four cities.</div>
+    <button class="big-btn" id="again-btn">PLAY AGAIN</button>
+  </div>
+</div>
+
+<script async src="https://cdn.jsdelivr.net/npm/es-module-shims@1.10.0/dist/es-module-shims.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.149.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
