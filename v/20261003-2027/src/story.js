@@ -203,7 +203,7 @@ export const storyStage = () => story?.stage || null;
 export const hqSpot = () => story?.hq || null;
 export const storyGoalText = () => {
   if (!story) return '';
-  return { witness: 'Find the ❗', informant: 'Talk to the ❗', raid: `Raid ${story.script.raid?.place || ''}`, clue: 'Grab the clue', hq: 'Go to the HQ' }[story.stage] || '';
+  return { witness: 'Find the ❗', informant: 'Talk to the ❗', raid: `Raid ${story.script.raid?.place || ''}`, clue: 'Grab the clue', reading: 'Read the clue', hq: 'Go to the HQ', boss: 'Beat the boss!' }[story.stage] || '';
 };
 
 export function updateStory(dt) {
