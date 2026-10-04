@@ -12,6 +12,7 @@ import { bossArrives } from './boss.js';
 import { spawnNest, clearNests } from './nests.js';
 import { buildCage, beacon, CAGE } from './camps.js';
 import { placeCrate } from './crates.js';
+import { startStory, clearStory, targetsRevealed, missionGoalsDone, reachedHq, storyObjective, storyStage, storyGoalText } from './story.js';
 import { DISTRICTS, buildings, openSpotNear, roadPointIn } from './map.js';
 import { sfx, say } from './audio.js';
 import { sparks, smoke, popWord } from './fx.js';
@@ -117,9 +118,12 @@ function makePart(pos) {
 export function setupMission(level) {
   clearMission();
   const items = SETUP[level.mission.type](level);
-  mission = { type: level.mission.type, level, items, total: items.length, stage: 'go' };
+  mission = { type: level.mission.type, level, items, total: items.length, stage: 'go', lastPos: new V3(-4, 0, 12) };
   for (let i = 0; i < level.roamers; i++) spawnRoamer(level.monsters, level.district);
   roamerT = 6;
+  startStory(world.levelIndex, level, () => {
+    world.banner?.(`${MISSION_TEXT[level.mission.type].icon} ${MISSION_TEXT[level.mission.type].goal}<small>It's on your map now</small>`, 3200);
+  });
 }
 
 export function clearMission() {
@@ -133,6 +137,7 @@ export function clearMission() {
   for (const m of markers) scene.remove(m);
   markers.length = 0;
   clearNests();
+  clearStory();
   mission = null;
 }
 
@@ -140,6 +145,7 @@ export function clearMission() {
 function complete(it, text) {
   if (it.done) return;
   it.done = true;
+  mission.lastPos = it.pos.clone().setY(0);
   const left = mission.items.filter(x => !x.done).length;
   sfx.save();
   if (left > 0) {
@@ -215,7 +221,9 @@ export function updateMissions(dt) {
     roamerT -= dt;
     const roaming = world.enemies.filter(e => e.alive && !e.camp).length;
     if (roamerT <= 0 && roaming < mission.level.roamers) { spawnRoamer(mission.level.monsters, mission.level.district); roamerT = rnd(4, 8); }
-    if (mission.items.every(it => it.done)) startBossIntro();
+    // all goals done: the story takes over (informant, maybe a raid, then the HQ where the boss is)
+    if (storyStage() === 'mission' && mission.items.every(it => it.done)) missionGoalsDone(mission.lastPos);
+    if (reachedHq()) startBossIntro();
   }
 }
 
@@ -234,6 +242,9 @@ export function updateBossIntro(dt) {
 /* Where the arrow and the minimap point. Airstrike/tank missions first send you to get the vehicle. */
 export function objective() {
   if (!mission) return null;
+  const s = storyObjective();
+  if (s) return s;
+  if (!targetsRevealed() || storyStage() !== 'mission') return null;
   const type = mission.type;
   if ((type === 'airstrike' || type === 'tank') && P.vehicle?.type !== (type === 'airstrike' ? 'jet' : 'tank')) {
     const want = type === 'airstrike' ? 'jet' : 'tank';
@@ -253,10 +264,15 @@ export function objective() {
 }
 
 export function missionTargets() {
-  return mission ? mission.items.filter(it => !it.done).map(it => ({ pos: it.pos, kind: it.kind })) : [];
+  if (!mission) return [];
+  const extra = storyObjective() ? [{ pos: storyObjective(), kind: 'story' }] : [];
+  if (!targetsRevealed()) return extra;
+  return mission.items.filter(it => !it.done).map(it => ({ pos: it.pos, kind: it.kind })).concat(extra);
 }
 
 export function missionStatus() {
   if (!mission) return { icon: '', done: 0, total: 0 };
+  const st = storyStage();
+  if (st && st !== 'mission') return { icon: '❗', done: 0, total: 0, text: storyGoalText() };
   return { icon: MISSION_TEXT[mission.type].icon, done: mission.items.filter(i => i.done).length, total: mission.total };
 }

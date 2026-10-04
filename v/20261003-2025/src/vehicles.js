@@ -103,7 +103,7 @@ export function vehicleNear() {
 }
 
 export function enterVehicle(v) {
-  P.vehicle = v; v.occupied = true;
+  P.vehicle = v; v.occupied = true; P.ads = false;
   P.yaw = v.yaw; P.pitch = 0.05;
   sfx.pickup();
   if (v.type === 'jet') { world.banner?.('JET!<small>Push up to speed down the runway, FIRE drops bombs</small>', 3200); say('Push up to take off!'); }
@@ -162,15 +162,17 @@ function wreck(v) {
 }
 
 /* ---------- driving ---------- */
-function drive(v, inp, dt) {
+function drive(v, drv, dt) {
   const t = v.t;
-  const throttle = -inp.z;
-  if (throttle > 0.1) v.speed += t.accel * throttle * dt;
-  else if (throttle < -0.1) v.speed += t.accel * 1.6 * throttle * dt;
-  else v.speed *= Math.pow(0.4, dt);
+  // GAS speeds up; BRAKE slows down, and once stopped it backs up
+  if (drv.gas) v.speed += t.accel * dt;
+  if (drv.brake) v.speed -= (v.speed > 0.5 ? t.accel * 2.2 : t.accel * 0.8) * dt;
+  if (!drv.gas && !drv.brake) v.speed *= Math.pow(0.45, dt);
   v.speed = clamp(v.speed, -t.maxSpeed * 0.4, t.maxSpeed);
-  const grip = Math.min(1, Math.abs(v.speed) / 6);
-  v.yaw -= inp.x * t.turn * grip * dt * Math.sign(v.speed || 1);
+  // easier steering: full lock at low speed, gentler when going fast
+  const grip = Math.min(1, Math.abs(v.speed) / 5);
+  const gentle = 1 - 0.5 * Math.min(1, Math.abs(v.speed) / t.maxSpeed);
+  v.yaw -= drv.steer * t.turn * grip * gentle * dt * Math.sign(v.speed || 1);
   const before = v.pos.clone();
   v.pos.x += Math.sin(v.yaw) * v.speed * dt;
   v.pos.z += Math.cos(v.yaw) * v.speed * dt;
@@ -272,12 +274,12 @@ function updateBombs(dt) {
 }
 
 /* ---------- per frame ---------- */
-export function updateVehicles(dt, inp) {
+export function updateVehicles(dt, inp, drv = { steer: inp.x, gas: inp.z < -0.2 ? 1 : 0, brake: inp.z > 0.2 ? 1 : 0 }) {
   for (const v of world.vehicles) {
     v.fireCd -= dt;
     if (v.dead) continue;
     if (v.occupied) {
-      if (v.type === 'jet') fly(v, inp, dt); else drive(v, inp, dt);
+      if (v.type === 'jet') fly(v, inp, dt); else drive(v, drv, dt);
       if (P.firing || P.fireQueued) {
         if (v.type === 'tank') fireCannon(v);
         if (v.type === 'jet') dropBomb(v);

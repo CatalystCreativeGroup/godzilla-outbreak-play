@@ -46,18 +46,29 @@ export function equipGun() {
   scene.add(handGun);
   viewGun = makeGun(gunId, 1);
   viewGun.traverse(o => { o.castShadow = false; });
+  // how far the sight (top of the gun) sits above the gun's centre, so aiming lines it up with the screen centre
+  viewGun.updateMatrixWorld(true);
+  viewGun.userData.sightY = new THREE.Box3().setFromObject(viewGun).max.y;
   camera.add(viewGun);
 }
 
 export function resetHero(start) {
   Object.assign(P, {
-    y: 0, vy: 0, onGround: true, climb: null, parachute: false, slowT: 0, vehicle: null, face: Math.PI, yaw: Math.PI, pitch: 0, hearts: GAME.hero.hearts, inv: 0, ko: 0, power: 0, kong: false, kongT: 0, morphT: 0,
+    y: 0, vy: 0, onGround: true, ads: false, adsT: 0, lookActive: 0, climb: null, parachute: false, slowT: 0, vehicle: null, face: Math.PI, yaw: Math.PI, pitch: 0, hearts: GAME.hero.hearts, inv: 0, ko: 0, power: 0, kong: false, kongT: 0, morphT: 0,
     fireCd: 0, aimT: 0, punchCd: 0, punchT: 0, roarCd: 0, roarT: 0, readyToldYou: false, firing: false, recoil: 0,
   });
   P.pos.copy(start);
   joseph.root.visible = true; joseph.root.rotation.set(0, 0, 0);
   kong.root.visible = false;
   equipGun();
+}
+
+/* AIM button: raise the gun and look down the sights (toggle). */
+export function toggleAim(force) {
+  const want = typeof force === 'boolean' ? force : !P.ads;
+  if (want && (P.vehicle || P.kong || P.climb || P.morphT > 0)) return;
+  P.ads = want;
+  if (want) sfx.pickup();
 }
 
 export const firstPerson = () => world.view === 'first' && !P.kong && !P.vehicle && world.state !== 'title';
@@ -80,7 +91,7 @@ export function addPower(n) {
 
 export function tryMorph() {
   if (!playing() || P.kong || P.vehicle || P.climb || P.power < 100 || P.ko > 0 || P.morphT > 0) return;
-  P.morphT = 1.1; P.inv = 99;
+  P.morphT = 1.1; P.inv = 99; P.ads = false;
   sfx.morph(); world.flash?.();
 }
 
@@ -164,7 +175,7 @@ export function hurtPlayer(n) {
   if (n <= 0) return;
   P.hearts -= n; sfx.hurt();
   if (P.hearts <= 0) {
-    P.hearts = 0; P.ko = 2.4;
+    P.hearts = 0; P.ko = 2.4; P.ads = false;
     world.banner?.('Get up, Joseph!', 1800);
   }
 }
@@ -191,6 +202,18 @@ function findAimTarget(from, dir, range) {
   return best;
 }
 
+/* When the sight is close to a monster, it gently settles onto it (stronger while aiming down the sights). */
+function aimMagnet(dt) {
+  const t = world.aimTarget;
+  if (!t || P.lookActive > 0 || !playing()) return;
+  const eye = eyePoint(), aim = aimPoint(t);
+  const wantYaw = Math.atan2(aim.x - eye.x, aim.z - eye.z);
+  const wantPitch = Math.atan2(aim.y - eye.y, Math.hypot(aim.x - eye.x, aim.z - eye.z));
+  const k = dt * (P.ads ? 2.6 : 0.8) * GAME.controls.aimHelp;
+  P.yaw = turnToward(P.yaw, wantYaw, k);
+  if (firstPerson()) P.pitch += (Math.max(-0.6, Math.min(0.6, wantPitch)) - P.pitch) * Math.min(1, k);
+}
+
 function eyePoint() {
   return new V3(P.pos.x, P.y + EYE, P.pos.z);
 }
@@ -206,13 +229,14 @@ function shoot() {
   P.fireCd = w.rate * rateMul();
   P.aimT = 0.35;
   P.recoil = Math.min(1, P.recoil + (loadout.current === 'bazooka' || loadout.current === 'shotgun' ? 1 : 0.45));
-  P.kick = Math.min(0.12, (P.kick || 0) + (loadout.current === 'bazooka' ? 0.06 : loadout.current === 'shotgun' ? 0.04 : 0.008));
+  P.kick = Math.min(0.12, (P.kick || 0) + (loadout.current === 'bazooka' ? 0.06 : loadout.current === 'shotgun' ? 0.04 : 0.008) * (P.ads ? 0.4 : 1));
 }
 
 /* ---------- per-frame ---------- */
 /* Climb a ladder to the roof (started from the action button). */
 export function startClimb(b) {
   if (P.vehicle || P.kong || P.climb) return;
+  P.ads = false;
   P.climb = b; P.vy = 0;
   P.yaw = P.face = Math.atan2(0, -b.ladder.nz);
   sfx.jump();
@@ -244,6 +268,9 @@ function updateJoseph(dt, inp) {
   if (P.climb) updateClimb(dt); else updateFalling(dt);
   P.fireCd -= dt; P.aimT -= dt;
   P.recoil = Math.max(0, P.recoil - dt * 6);
+  P.adsT += ((P.ads ? 1 : 0) - P.adsT) * Math.min(1, dt * 10);
+  P.lookActive = Math.max(0, (P.lookActive || 0) - dt);
+  aimMagnet(dt);
   P.kick = Math.max(0, (P.kick || 0) - dt * 0.6);
   world.aimTarget = findAimTarget(eyePoint(), aimDirection(), WEAPONS[loadout.current].range);
   // semi-auto: one shot per tap; with FULL AUTO, holding FIRE keeps shooting
@@ -280,8 +307,13 @@ function placeGuns(dt, inp) {
   const bob = inp && inp.l > 0.12 && P.y < 0.1 ? world.time * 11 : 0;
   const swayX = Math.sin(bob) * 0.012 * (inp?.l || 0), swayY = Math.abs(Math.cos(bob)) * 0.012 * (inp?.l || 0);
   const big = loadout.current === 'bazooka';
-  viewGun.position.set(0.24 + swayX, (big ? -0.3 : -0.24) - swayY + P.recoil * 0.015, (big ? -0.5 : -0.55) + P.recoil * 0.07);
-  viewGun.rotation.set(P.recoil * 0.12, Math.PI + 0.04, 0);
+  const a = P.adsT, sway = 1 - a * 0.8;
+  const hipX = 0.24 + swayX * sway, hipY = (big ? -0.3 : -0.24) - swayY * sway, hipZ = big ? -0.5 : -0.55;
+  // guns with a scope (rifle, bazooka) look through the scope; the others line up over the sights
+  const scoped = loadout.current === 'rifle' || big;
+  const adsY = -(viewGun.userData.sightY || 0.06) + (scoped ? 0.03 : -0.022), adsZ = big ? -0.42 : -0.36;
+  viewGun.position.set(hipX * (1 - a), hipY + (adsY - hipY) * a + P.recoil * 0.015 * sway, hipZ + (adsZ - hipZ) * a + P.recoil * 0.07 * sway);
+  viewGun.rotation.set(P.recoil * 0.12 * sway, Math.PI + 0.04 * (1 - a), 0);
 }
 
 function updateKong(dt, inp) {
@@ -325,7 +357,7 @@ export function updateHero(dt, inp) {
   if (P.vehicle) { joseph.root.visible = false; handGun.visible = false; viewGun.visible = false; return; }
   if (P.climb) { updateJoseph(dt, { x: 0, z: 0, l: 0 }); return; }
   P.slowT = Math.max(0, (P.slowT || 0) - dt);
-  const spd = (P.kong ? GAME.kong.speed : GAME.hero.speed) * (P.slowT > 0 ? 0.5 : 1) * (P.parachute ? 0.6 : 1);
+  const spd = (P.kong ? GAME.kong.speed : GAME.hero.speed) * (P.slowT > 0 ? 0.5 : 1) * (P.parachute ? 0.6 : 1) * (P.ads ? 0.55 : 1);
   P.moving = inp.l;
   P.pos.x += mx * spd * dt; P.pos.z += mz * spd * dt;
   if (P.kong) {

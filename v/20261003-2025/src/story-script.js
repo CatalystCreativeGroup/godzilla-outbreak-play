@@ -1,0 +1,176 @@
+/* =====================================================================
+   THE STORY — one script per level (see docs/STORY.md for the whole plot).
+   briefing:  the radio message at the start
+   witness:   the first person you talk to (marks the mission on the map)
+   informant: shows up when the mission is done and knows where to go next
+   raid:      (some levels) a hideout to storm; it's a fake, but there's a clue inside
+   hq:        the monster headquarters where the boss is
+   ending:    what happens after the boss, leading into the next level
+   ===================================================================== */
+export const CAST = {
+  max:    { name: 'Sergeant Max', face: '📻' },
+  ana:    { name: 'Dr. Ana', face: '🔬' },
+  rosa:   { name: 'Officer Rosa', face: '👮‍♀️' },
+  lee:    { name: 'Mr. Lee the mailman', face: '📮' },
+  pearl:  { name: 'Grandma Pearl', face: '👵' },
+  dee:    { name: 'Coach Dee', face: '🏀' },
+  ray:    { name: 'Captain Ray', face: '⚓' },
+  nina:   { name: 'Fisher Nina', face: '🎣' },
+  sam:    { name: 'Pilot Sam', face: '🧑‍✈️' },
+  jo:     { name: 'Mechanic Jo', face: '🔧' },
+  kai:    { name: 'Private Kai', face: '📻' },
+  kim:    { name: 'Ranger Kim', face: '🌋' },
+  frost:  { name: 'Dr. Frost', face: '🧊' },
+  note:   { name: 'A clue!', face: '📜' },
+};
+
+export const STORY = [
+  { // 1
+    briefing: ['max', 'Joseph, come in! Monster eggs are hatching downtown and the lizards are locking people in cages. Find Officer Rosa. She saw everything!'],
+    witness: ['rosa', 'Joseph! The monsters put people in cages all around downtown. I marked the camps on your map. Go free them!'],
+    informant: ['lee', 'Thank you! I deliver mail all over town, and I followed big muddy footprints. They lead to the city park!'],
+    hq: ['the city park', 'Something BIG is in the park...'],
+    ending: ['ana', 'Baby Godzilla dropped this glowing purple shard. It is a Roar Crystal! Something is using it to call the monsters.'],
+  },
+  { // 2
+    briefing: ['ana', 'The crystal shards are growing into monster nests downtown! Coach Dee called. He saw something strange.'],
+    witness: ['dee', 'Nests everywhere, Joseph! They keep making more lizards. I marked them on your map. Blow them up!'],
+    informant: ['dee', 'I saw a bigger monster carrying shards into the old parking garage. That has to be their hideout!'],
+    raid: { district: 'downtown', place: 'the parking garage', clue: ['note', 'The garage is empty! But someone scratched a crystal map on the wall... it points back to the park. Hurry!'] },
+    hq: ['the city park', 'The ground is shaking...'],
+    ending: ['ana', 'Kid Godzilla was carrying a shard too. My scanner says the crystal glow is coming from Maple Hills.'],
+  },
+  { // 3
+    briefing: ['max', 'Joseph, Maple Hills is covered in mud and monsters took people from their backyards. Grandma Pearl needs you!'],
+    witness: ['pearl', 'Oh, Joseph, thank goodness! The swampy monsters caged my neighbors. I marked where on your map, dear.'],
+    informant: ['dee', 'The mud trail goes into the old greenhouse at the edge of town. I bet the boss is in there!'],
+    raid: { district: 'residential', place: 'the old greenhouse', clue: ['note', 'Only muddy footprints here... they go to Maple Park! It was a trick!'] },
+    hq: ['Maple Park', 'The trees are moving... it is a monster!'],
+    ending: ['ana', 'Swamp Godzilla dropped a torn piece of paper. It is part of a map, a MONSTER MAP! We need the other pieces.'],
+  },
+  { // 4
+    briefing: ['max', 'Ice Godzilla froze the streets of Maple Hills! People climbed onto the rooftops to stay safe.'],
+    witness: ['pearl', 'They are stuck on the roofs and shivering! Climb the ladders and help them down. I marked the roofs.'],
+    informant: ['dee', 'From up on the roof I saw a giant ice monster heading for Maple Park!'],
+    hq: ['Maple Park', 'Brrr... the air is getting freezing cold!'],
+    ending: ['ana', 'The second map piece! Put them together and... the Monster Map shows the HARBOR!'],
+  },
+  { // 5
+    briefing: ['max', 'The map was right. Monsters are hiding people in shipping containers at the harbor. Find Captain Ray.'],
+    witness: ['ray', 'Ahoy, Joseph! They caged my crew all along the docks. I marked the camps on your map!'],
+    informant: ['nina', 'I saw monsters sneaking into the fish market. That smelly place must be their headquarters!'],
+    raid: { district: 'harbor', place: 'the fish market', clue: ['note', 'No boss here, just a monster radio! It says: "Attack the ARMY BASE!" But first... something is rising from the water at the big dock!'] },
+    hq: ['the big dock', 'Huge bubbles in the water...'],
+    ending: ['max', 'The radio was right. A giant brute army is marching to my army base! Get here fast!'],
+  },
+  { // 6
+    briefing: ['max', 'Joseph! Brutes are smashing my base! Grab a tank and stop them. Tanks crush monsters!'],
+    witness: ['kai', 'Private Kai here! The tanks are parked by the barracks. Hop in and fire the cannon!'],
+    informant: ['kai', 'We beat the brutes! But the storm clouds over the yard are crackling with lightning...'],
+    hq: ['the army yard', 'Lightning is striking the yard...'],
+    ending: ['max', 'Thunder Godzilla was guarding secret plans: the monsters are building giant BASES in Monster Land!'],
+  },
+  { // 7
+    briefing: ['max', 'Those bases are too far to walk. Get to the airport, take a jet, and drop bombs on them!'],
+    witness: ['sam', 'Pilot Sam here! The jets are on the runway. Push forward to take off and press BOMB over the bases!'],
+    informant: ['jo', 'Great flying! My radar shows something made of METAL walking near the bases. A robot?!'],
+    hq: ['Monster Land', 'Beep... beep... a giant robot is coming!'],
+    ending: ['ana', 'Mecha Godzilla is a robot! Its chip says "BUILT BY THE MONSTER KING". Who is the Monster King?!'],
+  },
+  { // 8
+    briefing: ['ana', 'The Monster King must be inside the volcano! Ranger Kim knows Monster Land better than anyone.'],
+    witness: ['kim', 'Be careful, Joseph! Nests are everywhere around the volcano. I marked them. Blow them up!'],
+    informant: ['kim', 'The monsters keep going into the lava caves. That must be the Monster King\'s home!'],
+    raid: { district: 'volcano', place: 'the lava caves', clue: ['note', 'Empty! Scratched on the wall: "THE KING HIDES IN SHADOWS." And behind you... a huge fire monster!'] },
+    hq: ['the foot of the volcano', 'Lava is bubbling up...'],
+    ending: ['ana', '"The king hides in shadows"... I need to build a Crystal Tracker to find him, but the monsters stole my parts!'],
+  },
+  { // 9
+    briefing: ['ana', 'The monsters hid my tracker parts all over downtown in this storm. Find them, Joseph!'],
+    witness: ['rosa', 'I saw lizards burying shiny metal things around downtown. I marked the spots for you!'],
+    informant: ['ana', 'That is every part! The tracker turns on... BEEP! Something dark is right here in the city park!'],
+    hq: ['the city park', 'It is getting very dark...'],
+    ending: ['ana', 'Shadow Godzilla is gone. The Crystal Tracker is pointing to the harbor now!'],
+  },
+  { // 10
+    briefing: ['ray', 'Joseph, nests are growing in the harbor and the water is turning green! That swamp monster is back, and bigger!'],
+    witness: ['nina', 'Blow up the nests before they hatch! I marked them on your map.'],
+    informant: ['ray', 'The tracker is beeping like crazy at the big dock!'],
+    hq: ['the big dock', 'The water is turning to mud...'],
+    ending: ['ana', 'Mega Swamp Godzilla is beaten. The tracker points to Maple Hills... and it is getting dark.'],
+  },
+  { // 11
+    briefing: ['max', 'It is nighttime in Maple Hills and it is FREEZING. Monsters caged people, and a scientist is missing!'],
+    witness: ['pearl', 'Joseph, they took my neighbors again, and a scientist named Dr. Frost! I marked the camps.'],
+    informant: ['frost', 'Thank you for saving me! The monsters made their hideout in the ice-cream factory. Hee hee, cold!'],
+    raid: { district: 'residential', place: 'the ice-cream factory', clue: ['frost', 'Nobody here! But I heard them say they are stealing JETS from the airport! And... the frost monster is at Maple Park!'] },
+    hq: ['Maple Park', 'Everything is turning to ice...'],
+    ending: ['sam', 'Joseph! Monsters are building new launch bases in Monster Land. We have to stop them before they launch!'],
+  },
+  { // 12
+    briefing: ['sam', 'The monsters built new bases in Monster Land. Grab a jet and bomb them before the storm gets worse!'],
+    witness: ['jo', 'I fueled up the jets for you. Fly fast and drop those bombs!'],
+    informant: ['jo', 'All bases down! But my radar sees a giant storm monster in Monster Land!'],
+    hq: ['Monster Land', 'Thunder booms all around...'],
+    ending: ['ana', 'Storm Godzilla dropped a golden piece of a CROWN. The Monster King\'s crown! We are getting close!'],
+  },
+  { // 13
+    briefing: ['rosa', 'Joseph! People are stuck on the tallest skyscrapers downtown. Climb up and save them!'],
+    witness: ['lee', 'I saw them up there waving. I marked every roof with people on it!'],
+    informant: ['rosa', 'Everyone is safe! But a giant robot is stomping toward the park. Is that another Mecha?!'],
+    hq: ['the city park', 'Clank... clank... CLANK!'],
+    ending: ['max', 'The Mecha King\'s computer had a target on it: MY ARMY BASE. Get back here, Joseph!'],
+  },
+  { // 14
+    briefing: ['max', 'The biggest brute army ever is at the base! Tanks out, Joseph!'],
+    witness: ['kai', 'The tanks are ready. Roll out and stop those brutes!'],
+    informant: ['kai', 'I found their secret tunnel into the old bunker. Let\'s raid it!'],
+    raid: { district: 'military', place: 'the old bunker', clue: ['note', 'A TRICK! The brutes were only a distraction. The note says: "Take the crystal to the volcano." And now something dark is in the yard!'] },
+    hq: ['the army yard', 'The shadows are moving...'],
+    ending: ['ana', 'The crystal is going back to the volcano. We have to stop them!'],
+  },
+  { // 15
+    briefing: ['kim', 'Joseph! Monsters caged people right next to the lava. It is getting hot. Hurry!'],
+    witness: ['kim', 'I marked the camps on your map. Watch out for the lava!'],
+    informant: ['ana', 'My tracker is going wild. The lava monster is at the foot of the volcano!'],
+    hq: ['the foot of the volcano', 'The volcano is rumbling...'],
+    ending: ['ana', 'Wait... the crystal signal is not coming from the volcano at all. It is coming from UNDER THE SEA!'],
+  },
+  { // 16
+    briefing: ['ana', 'To look under the sea we need my diving drone, but the monsters stole its parts at the harbor!'],
+    witness: ['ray', 'I saw them hide shiny parts all over the docks. I marked them for you!'],
+    informant: ['ana', 'The drone works! It found tunnels under the sea... and a sea monster at the big dock!'],
+    hq: ['the big dock', 'A huge wave is coming!'],
+    ending: ['ana', 'The drone followed the tunnels. They come out under DOWNTOWN!'],
+  },
+  { // 17
+    briefing: ['max', 'Nests are popping out of the tunnels all over downtown tonight. Blow them up, Joseph!'],
+    witness: ['rosa', 'They are coming out of the ground everywhere! I marked the nests on your map.'],
+    informant: ['lee', 'I saw monsters going down into the subway station. That must be where the tunnels go!'],
+    raid: { district: 'downtown', place: 'the subway station', clue: ['note', 'Empty again! But a map on the wall shows every tunnel going to MONSTER LAND. And thunder is booming in the park!'] },
+    hq: ['the city park', 'Lightning is everywhere!'],
+    ending: ['max', 'The Monster King\'s fortress is in Monster Land, protected by shield towers. We need jets!'],
+  },
+  { // 18
+    briefing: ['sam', 'This is the big one, Joseph! Bomb the shield towers around the Monster King\'s fortress!'],
+    witness: ['jo', 'All jets are ready. Go, go, go!'],
+    informant: ['jo', 'The shields are down! But the strongest robot ever is guarding the fortress!'],
+    hq: ['Monster Land', 'BEEP BEEP BEEP!'],
+    ending: ['ana', 'The fortress is open. Joseph, this is it. The Monster King is inside!'],
+  },
+  { // 19
+    briefing: ['max', 'Everyone, this is the final push into Monster Land! Blow up the nests and get to the fortress!'],
+    witness: ['kim', 'The nests guard the fortress gate. I marked them all. Be brave, Joseph!'],
+    informant: ['kim', 'The nests are gone! The fortress gate is open. Let\'s go in!'],
+    raid: { district: 'volcano', place: 'the fortress gate', clue: ['note', 'The throne is EMPTY! The Monster King\'s guard is here, the Shadow King. Beat him!'] },
+    hq: ['the foot of the volcano', 'The shadows are getting bigger...'],
+    ending: ['max', 'Joseph! Max Godzilla, the MONSTER KING, is flying to downtown with the Roar Crystal! Get back to the city!'],
+  },
+  { // 20
+    briefing: ['max', 'This is it, Joseph. Max Godzilla is attacking downtown. Free the last people and stop the Monster King!'],
+    witness: ['rosa', 'Joseph! The last camps are all over downtown. Everyone is counting on you!'],
+    informant: ['ana', 'Everyone is free! The Monster King is in the city park with the Roar Crystal. Smash it, Joseph!'],
+    hq: ['the city park', 'The ground is shaking harder than ever...'],
+    ending: ['ana', 'You smashed the Roar Crystal! Every monster fell asleep. Joseph, you saved the whole city. You are King Kong, Protector of the City!'],
+  },
+];

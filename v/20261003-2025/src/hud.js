@@ -33,8 +33,8 @@ export function updateHud() {
     $('btn-morph').classList.toggle('ready', ready);
   });
   const ms = missionStatus();
-  setIfChanged('mission', `${ms.icon}${ms.done}/${ms.total}/${world.allies.length}`, () => {
-    $('m-camps').innerHTML = `<span class="ic">${ms.icon}</span><b>${ms.done}/${ms.total}</b>`;
+  setIfChanged('mission', `${ms.icon}${ms.done}/${ms.total}/${world.allies.length}/${ms.text || ''}`, () => {
+    $('m-camps').innerHTML = ms.text ? `<span class="ic">${ms.icon}</span><b>${ms.text}</b>` : `<span class="ic">${ms.icon}</span><b>${ms.done}/${ms.total}</b>`;
     $('m-army').innerHTML = `<span class="ic">🪖</span><b>${world.allies.length}/${GAME.army.maxSize}</b>`;
     $('m-camps').classList.toggle('done', ms.total > 0 && ms.done >= ms.total);
   });
@@ -46,9 +46,11 @@ export function updateHud() {
   }
   setIfChanged('roarCool', P.kong && P.roarCd > 0, c => $('btn-a').classList.toggle('cool', c));
   const showCross = P.vehicle ? P.vehicle.type === 'tank' : (firstPerson() || !P.kong);
-  setIfChanged('crosshair', showCross ? (world.aimTarget && !P.vehicle ? 'on' : 'off') : 'hidden', v => {
+  setIfChanged('crosshair', (P.ads ? 'a' : '') + (showCross ? (world.aimTarget && !P.vehicle ? 'on' : 'off') : 'hidden'), v => {
+    v = v.replace(/^a/, '');
     $('crosshair').hidden = v === 'hidden';
     $('crosshair').classList.toggle('on', v === 'on');
+    $('crosshair').classList.toggle('ads', P.ads);
   });
 }
 
@@ -77,6 +79,7 @@ export function updateWeaponHud() {
 export function setKongControls(isKong) {
   $('btn-morph').hidden = isKong;
   $('btn-swap').hidden = isKong;
+  $('btn-aim').hidden = isKong;
   $('weapon-chip').hidden = isKong;
   $('btn-a-ic').textContent = isKong ? '📣' : '⬆️';
   $('btn-a-label').textContent = isKong ? 'ROAR' : 'JUMP';
@@ -136,6 +139,7 @@ export function setVehicleControls(v) {
   const inside = !!v;
   $('btn-a').hidden = inside;
   $('btn-swap').hidden = inside || P.kong;
+  $('btn-aim').hidden = inside || P.kong;
   $('btn-morph').hidden = inside || P.kong;
   $('weapon-chip').hidden = inside || P.kong;
   $('btn-fire').hidden = inside && v.type === 'car';
@@ -148,13 +152,14 @@ export function setVehicleControls(v) {
 const stick = { id: null, ox: 0, oy: 0, x: 0, y: 0 };
 const keys = new Set();
 const STICK_R = 60;
+const capture = (el, e) => { try { el.setPointerCapture(e.pointerId); } catch (err) { /* finger already gone */ } };
 
 export function initInput(actions) {
   const zone = $('stick-zone'), base = $('stick-base'), knob = $('stick-knob');
   zone.addEventListener('pointerdown', e => {
     e.preventDefault();
     if (stick.id !== null) return;
-    stick.id = e.pointerId; zone.setPointerCapture(e.pointerId);
+    stick.id = e.pointerId; capture(zone, e);
     const r = zone.getBoundingClientRect();
     stick.ox = e.clientX; stick.oy = e.clientY;
     base.style.left = (e.clientX - r.left) + 'px'; base.style.top = (e.clientY - r.top) + 'px';
@@ -184,11 +189,12 @@ export function initInput(actions) {
   pad('btn-morph', actions.morph);
   pad('btn-swap', actions.swap);
   pad('btn-view', actions.view);
+  pad('btn-aim', actions.aim);
   pad('btn-act', actions.act);
 
   // FIRE: hold to keep shooting
   const fire = $('btn-fire');
-  fire.addEventListener('pointerdown', e => { e.preventDefault(); fire.setPointerCapture(e.pointerId); fire.classList.add('down'); P.firing = true; P.fireQueued = true; });
+  fire.addEventListener('pointerdown', e => { e.preventDefault(); fire.classList.add('down'); P.firing = true; P.fireQueued = true; capture(fire, e); });
   for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) fire.addEventListener(ev, () => { fire.classList.remove('down'); P.firing = false; });
 
   // LOOK: drag the right side of the screen to turn and aim
@@ -198,11 +204,13 @@ export function initInput(actions) {
     e.preventDefault();
     if (drag.id !== null) return;
     drag.id = e.pointerId; drag.x = e.clientX; drag.y = e.clientY;
-    look.setPointerCapture(e.pointerId);
+    capture(look, e);
   });
   look.addEventListener('pointermove', e => {
     if (e.pointerId !== drag.id) return;
-    const k = 0.0055 * GAME.controls.lookSpeed;
+    // slower look while aiming down the sights, and a little sticky when the crosshair is on a monster
+    const k = 0.0055 * GAME.controls.lookSpeed * (P.ads ? 0.45 : 1) * (world.aimTarget ? 0.7 : 1);
+    P.lookActive = 0.15;
     P.yaw -= (e.clientX - drag.x) * k;
     P.lookT = 1.5; // while driving, the camera stays where you looked for a moment
     P.pitch = Math.max(-0.6, Math.min(0.6, P.pitch - (e.clientY - drag.y) * k * 0.8));
@@ -218,6 +226,7 @@ export function initInput(actions) {
     if (e.code === 'Space') { e.preventDefault(); P.kong ? actions.roar() : actions.jump(); }
     if ((e.code === 'KeyF' || e.code === 'Enter') && !e.repeat) { P.firing = true; P.fireQueued = true; }
     if (e.code === 'KeyV') actions.view();
+    if (e.code === 'KeyZ') actions.aim();
     if (e.code === 'KeyM' || e.code === 'KeyE') actions.morph();
     if (e.code === 'KeyR') actions.roar();
     if (e.code === 'KeyQ' || e.code === 'Tab') { e.preventDefault(); actions.swap(); }

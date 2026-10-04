@@ -4,6 +4,10 @@ import { camera } from './engine.js';
 import { V3, rnd, world, P, angleTo, turnToward } from './world.js';
 import { shakeState } from './fx.js';
 import { EYE, firstPerson } from './hero.js';
+import { loadout } from './world.js';
+
+/* How much each gun zooms in when aiming down the sights (scopes zoom the most). */
+const ZOOM = { blaster: 1.35, rifle: 1.9, shotgun: 1.25, bazooka: 2.3, lightning: 1.4, freeze: 1.4 };
 
 const camPos = new V3(0, 40, 60), camLook = new V3();
 let lastFov = 0, lastNear = 0;
@@ -60,8 +64,9 @@ function outsideCamera(dt) {
   if (P.vehicle) return vehicleCamera(dt);
   const bossOn = world.state === 'boss' || world.state === 'bossIntro';
   const fwd = new V3(Math.sin(P.yaw), 0, Math.cos(P.yaw)), right = new V3(-Math.cos(P.yaw), 0, Math.sin(P.yaw));
-  const back = P.kong ? 21 : bossOn ? 8.5 : 6.2;
-  const up = P.kong ? 13 : bossOn ? 4.6 : 3.3;
+  const a = P.kong ? 0 : (P.adsT || 0); // aiming pulls the camera in over the shoulder
+  const back = P.kong ? 21 : (bossOn ? 8.5 : 6.2) * (1 - a) + 3.0 * a;
+  const up = P.kong ? 13 : (bossOn ? 4.6 : 3.3) * (1 - a) + 2.3 * a;
   const shoulder = P.kong ? 0 : 1.0;
   const want = P.pos.clone().addScaledVector(fwd, -back).addScaledVector(right, shoulder).setY(P.y + up - P.pitch * (P.kong ? 8 : 3));
   camPos.lerp(want, Math.min(1, dt * 9));
@@ -85,11 +90,12 @@ export function updateCamera(dt) {
     P.yaw = turnToward(P.yaw, angleTo(P.pos, boss.pos), dt * 3);
     P.pitch += (0.18 - P.pitch) * Math.min(1, dt * 2);
   }
+  const zoom = 1 + ((ZOOM[loadout.current] || 1.4) - 1) * (P.adsT || 0);
   if (firstPerson()) {
-    setLens(portrait ? 78 : 62, 0.08);
+    setLens((portrait ? 78 : 62) / zoom, 0.08);
     firstPersonCamera(dt);
   } else {
-    setLens(portrait ? 72 : 56, 0.3);
+    setLens((portrait ? 72 : 56) / (1 + (zoom - 1) * 0.35), 0.3);
     outsideCamera(dt);
   }
   applyShake(dt);

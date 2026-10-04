@@ -13,7 +13,7 @@ import { updateShots, clearShots, setHostileTargets } from './weapons.js';
 import { updateLoot, clearLoot } from './loot.js';
 import { updateEnemies, clearEnemies, setVictims } from './enemies.js';
 import { updateAllies, gatherAllies, restoreArmy, spawnSoldiers } from './allies.js';
-import { createHero, resetHero, updateHero, heroVictim, heroJump, tryMorph, kongPunch, kongRoar, hurtPlayer, addPower, equipGun, poseHeroForTitle, firstPerson, startClimb } from './hero.js';
+import { createHero, resetHero, updateHero, heroVictim, heroJump, tryMorph, kongPunch, kongRoar, hurtPlayer, addPower, equipGun, poseHeroForTitle, firstPerson, startClimb, toggleAim } from './hero.js';
 import { updateCamera } from './camera.js';
 import { setupBoss, updateBoss, hideBoss, poseBossForTitle } from './boss.js';
 import { setupMission, updateMissions, updateBossIntro, objective, clearMission, missionTargets } from './missions.js';
@@ -21,6 +21,8 @@ import { updateNests } from './nests.js';
 import { scatterCrates } from './crates.js';
 import { setupVehicles, updateVehicles, vehicleNear, enterVehicle, exitVehicle, vehicleVictim, clearBombs } from './vehicles.js';
 import { initMinimap, updateMinimap } from './minimap.js';
+import { updateStory, talk, npcNear, endingLine, dialog } from './story.js';
+import { initDriveControls, showDriveControls, driveInput } from './drive-controls.js';
 import { updateHud, updateWeaponHud, setKongControls, setVehicleControls, setAction, banner, flashScreen, hurtFlash, showScreen, renderLevelPicker, initInput, moveInput, resetHudCache, updateCompass } from './hud.js';
 import { loadSave, applySave, writeSave, nextLevelIndex, resetSave } from './save.js';
 
@@ -34,7 +36,7 @@ Object.assign(world, {
   onWeaponChange: () => { equipGun(); updateWeaponHud(); writeSave(); },
   onEnemyDefeated: () => addPower(GAME.power.perMonster),
   onBossDefeated: winLevel,
-  onVehicleChange: () => setVehicleControls(P.vehicle),
+  onVehicleChange: () => { setVehicleControls(P.vehicle); showDriveControls(P.vehicle?.type); },
   spawnSoldiers,
 });
 const victims = () => [heroVictim, vehicleVictim, ...world.allies].filter(v => v.alive);
@@ -94,8 +96,8 @@ function startLevel(index) {
   world.state = 'mission';
   const where = DISTRICTS[level.district].name;
   const goal = MISSION_TEXT[level.mission.type].goal;
-  banner(`LEVEL ${index + 1}: ${level.name}<small>${where}: ${goal}</small>`, 4200);
-  say(`Level ${index + 1}. ${goal}`);
+  showDriveControls(null);
+  banner(`LEVEL ${index + 1}: ${level.name}<small>${where}</small>`, 3000);
 }
 
 function winLevel() {
@@ -109,8 +111,11 @@ function winLevel() {
   for (let i = 0; i < 6; i++) setTimeout(() => sparks(new V3(P.pos.x + rnd(-8, 8), 10, P.pos.z + rnd(-8, 8)), [0xffd23f, 0x9dff4a, 0xff7b24, 0x6ff6ff][i % 4], 30, 14, 0.7), i * 250);
   const isLast = world.levelIndex === LEVELS.length - 1;
   setTimeout(() => {
-    if (isLast) { showScreen('ending'); return; }
+    if (isLast) { const e = endingLine(); if (e) say(e[1]); showScreen('ending'); return; }
     $('win-title').textContent = `LEVEL ${n} DONE!`;
+    const ending = endingLine();
+    $('win-story').textContent = ending ? ending[1] : '';
+    if (ending) say(ending[1]);
     $('win-reward-box').hidden = !level.reward;
     $('win-reward').textContent = level.reward || '';
     $('win-army').textContent = world.allies.length;
@@ -150,6 +155,7 @@ function swapWeapon(dir = 1) {
 /* The action button does whatever makes sense right here. */
 function contextAction() {
   if (P.vehicle) return { label: '🚪 EXIT', run: exitVehicle };
+  if (npcNear()) return { label: '💬 TALK', run: talk };
   const v = vehicleNear();
   if (v) return { label: v.t.label, run: () => enterVehicle(v) };
   const ladder = !P.kong && !P.climb ? ladderNear(P.pos, P.y) : null;
@@ -160,6 +166,7 @@ initInput({
   jump: heroJump, punch: kongPunch, morph: tryMorph, roar: kongRoar,
   swap: () => swapWeapon(1),
   view: toggleView,
+  aim: () => toggleAim(),
   act: () => { if (world.state === 'mission' || world.state === 'boss') contextAction()?.run(); },
   select: i => { if (!P.kong && !P.vehicle && loadout.owned[i]) { loadout.current = loadout.owned[i]; world.onWeaponChange(); } },
 });
@@ -207,16 +214,20 @@ function update(dt) {
     poseHeroForTitle(dt);
     poseBossForTitle(dt);
     updateAllies(dt);
+  } else if (world.paused) {
+    // a story dialog is open: the world waits
   } else if (world.state !== 'loading') {
     const live = world.state === 'mission' || world.state === 'boss';
     const inp = live ? moveInput(dt) : { x: 0, z: 0, l: 0 };
-    updateVehicles(dt, inp);
+    const drivingCar = P.vehicle && P.vehicle.type !== 'jet';
+    updateVehicles(dt, inp, drivingCar && live ? driveInput(dt) : undefined);
     updateHero(dt, inp);
     updateAllies(dt);
     if (world.state !== 'win' && world.state !== 'ending') { updateEnemies(dt); updateShots(dt); updateNests(dt); }
     updateBoss(dt);
     updateLoot(dt);
     updateMissions(dt);
+    updateStory(dt);
     if (world.state === 'bossIntro') updateBossIntro(dt);
     updateArrow();
     updateHud();
@@ -248,6 +259,7 @@ async function boot() {
   applyTheme('day');
   buildWorld();
   initMinimap();
+  initDriveControls();
   loop();
   await loadModels(f => { $('load-fill').style.width = Math.round(f * 100) + '%'; });
   createHero();
