@@ -49,11 +49,11 @@ export function setupBoss(bossCfg) {
   world.bossTarget = null;
 }
 
-export function bossArrives() {
+export function bossArrives(at = null) {
   B.mode = 'falling'; B.y = 70; B.vy = 0;
   // land in an open spot close to Joseph, wherever he is on the map
   const a = Math.random() * Math.PI * 2;
-  B.pos.copy(openSpotNear(P.pos.x + Math.cos(a) * 28, P.pos.z + Math.sin(a) * 28, 12, 3 * cfg.size));
+  B.pos.copy(at || openSpotNear(P.pos.x + Math.cos(a) * 28, P.pos.z + Math.sin(a) * 28, 12, 3 * cfg.size));
   B.face = angleTo(B.pos, P.pos);
   model.root.visible = true;
   world.bossTarget = bossTarget;

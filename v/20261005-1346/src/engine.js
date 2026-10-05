@@ -87,11 +87,16 @@ export function followSun(focus) {
   sun.target.position.set(focus.x, 0, focus.z);
 }
 
+let lastW = 0, lastH = 0;
 export function resize() {
-  const w = window.innerWidth, h = window.innerHeight;
+  // the page's own size (window.inner* shrinks when Safari zooms and can be stale right after rotating)
+  const w = document.documentElement.clientWidth || window.innerWidth, h = document.documentElement.clientHeight || window.innerHeight;
+  if (w === lastW && h === lastH) return;
+  lastW = w; lastH = h;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 300));
 resize();

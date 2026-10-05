@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { scene } from './engine.js';
 import { GAME } from './settings.js';
-import { spawnModel, inView } from './models.js';
+import { spawnModel, inView, disposeModel } from './models.js';
 import { collide, blocked } from './map.js';
 import { fireWeapon, nearestTarget, makeGun, teamMul } from './weapons.js';
 import { sfx } from './audio.js';
@@ -157,7 +157,7 @@ export function updateAllies(dt) {
     l.h.model.root.position.copy(l.h.pos); l.h.model.root.rotation.y = l.dir;
     l.h.model.root.scale.setScalar(Math.min(1, l.t));
     l.h.model.anim.update(dt);
-    if (l.t <= 0) { scene.remove(l.h.model.root); leaving.splice(i, 1); }
+    if (l.t <= 0) { disposeModel(l.h.model); leaving.splice(i, 1); }
   }
 }
 

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<base href="v/20261003-2027/">
+<base href="v/20261005-1346/">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Godzilla Outbreak</title>
@@ -12,7 +12,7 @@
 /* Layout: full-screen 3D view; a tactical glass HUD on top; thumbs-first controls in the bottom corners. */
 :root {
   --ink: #0d1014;
-  --glass: rgba(14, 18, 22, .62);
+  --glass: rgba(14, 18, 22, .72);
   --edge: rgba(255, 255, 255, .16);
   --text: #f4f1ea;
   --muted: #b9b4a8;
@@ -25,12 +25,13 @@
   --body: "Nunito", "Trebuchet MS", system-ui, sans-serif;
   color-scheme: dark;
 }
-html, body { height: 100%; margin: 0; overflow: hidden; background: #0d1014; }
+html, body { height: 100%; margin: 0; overflow: hidden; background: #0d1014; -webkit-text-size-adjust: 100%; overscroll-behavior: none; touch-action: none; }
+button { touch-action: manipulation; }
 [hidden] { display: none !important; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-#app { position: fixed; inset: 0; touch-action: none; font-family: var(--body); color: var(--text); overflow: hidden; }
-#c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.glass { background: var(--glass); border: 1px solid var(--edge); border-radius: 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, .35); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+#app { position: fixed; top: 0; right: 0; bottom: 0; left: 0; touch-action: none; font-family: var(--body); color: var(--text); overflow: hidden; }
+#c { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; display: block; }
+.glass { background: var(--glass); border: 1px solid var(--edge); border-radius: 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, .35);  }
 
 /* ---------- HUD ---------- */
 .hud-top {
@@ -79,7 +80,7 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #0d1014; }
   display: grid; place-items: center; font-size: 24px; color: var(--gold); text-shadow: 0 2px 4px #000; pointer-events: none;
 }
 #look-zone { position: absolute; right: 0; top: 0; width: 50%; height: 100%; touch-action: none; }
-#drive { position: absolute; inset: 0; pointer-events: none; }
+#drive { position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; }
 #wheel {
   position: absolute; pointer-events: auto; touch-action: none; width: 190px; height: 190px;
   left: calc(env(safe-area-inset-left, 0px) + 22px); bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
@@ -91,15 +92,22 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #0d1014; }
   right: calc(env(safe-area-inset-right, 0px) + 168px); bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
 }
 .pedal {
-  width: 92px; height: 120px; border-radius: 18px; border: 2px solid rgba(255, 255, 255, .35); color: var(--text); touch-action: none; cursor: pointer;
-  font-family: var(--display); font-size: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, .4);
+  background: none; border: 0; padding: 0; color: var(--text); touch-action: none; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 4px; transform-origin: 50% 0;
+  transition: transform .06s; filter: drop-shadow(0 8px 10px rgba(0, 0, 0, .55));
 }
-.pedal .ic { font-size: 30px; }
-.pedal.gas { height: 140px; background: rgba(30, 120, 50, .7); border-color: rgba(157, 255, 74, .7); }
-.pedal.brake { background: rgba(140, 30, 24, .65); border-color: rgba(255, 120, 100, .7); }
-.pedal.down { transform: scale(.94) translateY(4px); filter: brightness(1.3); }
+.pedal svg { display: block; }
+.pedal.brake svg { width: 104px; height: 130px; }
+.pedal.gas svg { width: 70px; height: 150px; }
+.pedal .lbl { font-family: var(--display); font-size: 13px; letter-spacing: .08em; text-shadow: 0 2px 4px #000; }
+.pedal.down { transform: perspective(300px) rotateX(18deg) translateY(4px); }
 .pad.aim { grid-area: aim; }
+.pad.aim.on { background: rgba(255, 60, 40, .75); border-color: #fff; }
+#sight { position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; }
+#scope { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: grid; place-items: center; background: radial-gradient(circle at center, rgba(120, 170, 150, .06) 0, rgba(0, 0, 0, 0) 40vmin, #040404 41.5vmin); }
+#scope svg { width: 83vmin; height: 83vmin; }
+#holo { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: grid; place-items: center; }
+#holo svg { width: 58vmin; height: 42.5vmin; }
 #crosshair.ads i { opacity: .25; }
 #crosshair.ads b { width: 6px; height: 6px; left: 14px; top: 14px; background: #ff3a2a; }
 #dialog {
@@ -137,9 +145,9 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #0d1014; }
 }
 #banner.show { opacity: 1; transform: scale(1); }
 #banner small { display: block; font-size: .45em; margin-top: .35em; color: var(--gold); font-family: var(--body); font-weight: 900; }
-#flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity .5s; }
+#flash { position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity .5s; }
 #flash.on { opacity: .85; transition: none; }
-#hurt { position: absolute; inset: 0; pointer-events: none; opacity: 0; box-shadow: inset 0 0 140px 40px rgba(200, 20, 30, .65); transition: opacity .4s; }
+#hurt { position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; opacity: 0; box-shadow: inset 0 0 140px 40px rgba(200, 20, 30, .65); transition: opacity .4s; }
 #hurt.on { opacity: 1; transition: none; }
 
 /* ---------- Controls ---------- */
@@ -157,7 +165,7 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #0d1014; }
 .pad {
   width: 92px; height: 92px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .35); background: rgba(14, 18, 22, .6); color: var(--text);
   font-family: var(--display); font-size: 14px; letter-spacing: .05em; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  touch-action: none; cursor: pointer; padding: 0; box-shadow: 0 6px 18px rgba(0, 0, 0, .4); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  touch-action: none; cursor: pointer; padding: 0; box-shadow: 0 6px 18px rgba(0, 0, 0, .4); 
 }
 .pad .ic { font-size: 30px; line-height: 1; }
 .pad.down { transform: scale(.93); background: rgba(255, 255, 255, .2); }
@@ -176,9 +184,9 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #0d1014; }
 
 /* ---------- Screens ---------- */
 .screen {
-  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
   padding: calc(env(safe-area-inset-top, 0px) + 20px) 16px calc(env(safe-area-inset-bottom, 0px) + 20px); text-align: center;
-  background: radial-gradient(ellipse at 50% 40%, rgba(0, 0, 0, .05), rgba(0, 0, 0, .72)); overflow-y: auto;
+  background: radial-gradient(ellipse at 50% 40%, rgba(0, 0, 0, .05), rgba(0, 0, 0, .72)); overflow-y: auto; touch-action: pan-y;
 }
 .logo { display: flex; flex-direction: column; align-items: center; line-height: .9; }
 .logo .l1 { font-family: var(--display); font-size: clamp(52px, 12vw, 140px); color: #e8f5dc; letter-spacing: .02em; text-shadow: 0 4px 0 #1d3a10, 0 0 40px rgba(157, 255, 74, .45), 0 10px 30px #000; }
@@ -201,6 +209,8 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #0d1014; }
 .city-btn.beaten .s { color: var(--toxic); }
 .city-btn.locked { opacity: .45; cursor: default; }
 .ver { font-size: 12px; color: var(--muted); opacity: .7; }
+.mode-btns { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+.big-btn.free { background: linear-gradient(180deg, #8ff07a, #3fae2e); box-shadow: 0 8px 0 #1f5c14, 0 14px 30px rgba(0, 0, 0, .5); }
 .win-title { font-family: var(--display); font-size: clamp(46px, 10vw, 110px); line-height: .95; color: var(--gold); text-shadow: 0 4px 0 #5a3a00, 0 10px 30px #000; }
 .rewards { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .reward { display: flex; flex-direction: column; gap: 4px; padding: 10px 18px; font-family: var(--display); }
@@ -245,12 +255,34 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #0d1014; }
       </div>
     </div>
     <div class="top-btns">
+      <button id="btn-home" class="glass round" aria-label="Back to the title screen">🏠</button>
       <button id="btn-view" class="glass round" aria-label="Switch between first person and outside view">👁️</button>
       <button id="sound-btn" class="glass round" aria-label="Sound on or off">🔊</button>
     </div>
   </div>
   <canvas id="minimap" aria-label="Map (tap to open the whole city)"></canvas>
   <div id="compass" hidden aria-hidden="true">▲</div>
+  <div id="sight" aria-hidden="true">
+    <div id="scope" hidden>
+      <svg viewBox="0 0 400 400">
+        <defs><filter id="glow"><feGaussianBlur stdDeviation="3"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+        <circle cx="200" cy="200" r="198" fill="none" stroke="#000" stroke-width="6"/>
+        <g stroke="#0a0a0a" stroke-width="2.4"><line x1="0" y1="200" x2="176" y2="200"/><line x1="224" y1="200" x2="400" y2="200"/><line x1="200" y1="0" x2="200" y2="176"/><line x1="200" y1="224" x2="200" y2="400"/></g>
+        <g stroke="#0a0a0a" stroke-width="9"><line x1="0" y1="200" x2="70" y2="200"/><line x1="330" y1="200" x2="400" y2="200"/><line x1="200" y1="330" x2="200" y2="400"/></g>
+        <g fill="#0a0a0a"><circle cx="230" cy="200" r="2.2"/><circle cx="170" cy="200" r="2.2"/><circle cx="200" cy="230" r="2.2"/><circle cx="200" cy="170" r="2.2"/><circle cx="260" cy="200" r="2.2"/><circle cx="140" cy="200" r="2.2"/><circle cx="200" cy="260" r="2.2"/><circle cx="200" cy="140" r="2.2"/><circle cx="290" cy="200" r="2.2"/><circle cx="110" cy="200" r="2.2"/><circle cx="200" cy="290" r="2.2"/><circle cx="200" cy="110" r="2.2"/><circle cx="320" cy="200" r="2.2"/><circle cx="80" cy="200" r="2.2"/><circle cx="200" cy="320" r="2.2"/><circle cx="200" cy="80" r="2.2"/></g>
+        <g filter="url(#glow)"><circle cx="200" cy="200" r="4.5" fill="#ff2a1a"/><path d="M188 214 L200 202 L212 214" fill="none" stroke="#ff2a1a" stroke-width="2.5"/></g>
+      </svg>
+    </div>
+    <div id="holo" hidden>
+      <svg viewBox="0 0 300 220">
+        <defs><filter id="glow2"><feGaussianBlur stdDeviation="2.5"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+        <rect x="6" y="6" width="288" height="208" rx="26" fill="rgba(150,200,190,.06)" stroke="#16181b" stroke-width="12"/>
+        <rect x="16" y="16" width="268" height="188" rx="18" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="2"/>
+        <g filter="url(#glow2)" fill="none" stroke="#ff2a1a"><circle cx="150" cy="110" r="34" stroke-width="2.5"/><line x1="150" y1="70" x2="150" y2="82" stroke-width="2.5"/><line x1="150" y1="138" x2="150" y2="150" stroke-width="2.5"/><line x1="110" y1="110" x2="122" y2="110" stroke-width="2.5"/><line x1="178" y1="110" x2="190" y2="110" stroke-width="2.5"/></g>
+        <circle cx="150" cy="110" r="3.5" fill="#ff2a1a" filter="url(#glow2)"/>
+      </svg>
+    </div>
+  </div>
   <div id="crosshair" hidden aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></div>
 
   <div id="banner"></div>
@@ -271,8 +303,18 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #0d1014; }
         </svg>
       </div>
       <div id="pedals">
-        <button class="pedal brake" id="pedal-brake" aria-label="Brake and reverse"><span class="ic">🛑</span>BRAKE</button>
-        <button class="pedal gas" id="pedal-gas" aria-label="Gas"><span class="ic">⏩</span>GAS</button>
+        <button class="pedal brake" id="pedal-brake" aria-label="Brake and reverse"><svg viewBox="0 0 120 150" aria-hidden="true">
+          <rect x="54" y="0" width="12" height="40" rx="4" fill="#4a4d52"/>
+          <rect x="6" y="34" width="108" height="96" rx="16" fill="#26282c" stroke="#5a5e64" stroke-width="4"/>
+          <g fill="#121315"><rect x="18" y="48" width="84" height="7" rx="3.5"/><rect x="18" y="62" width="84" height="7" rx="3.5"/><rect x="18" y="76" width="84" height="7" rx="3.5"/><rect x="18" y="90" width="84" height="7" rx="3.5"/><rect x="18" y="104" width="84" height="7" rx="3.5"/><rect x="18" y="118" width="84" height="7" rx="3.5"/></g>
+          <rect x="10" y="38" width="100" height="10" rx="5" fill="#ffffff" opacity=".08"/>
+        </svg><span class="lbl">BRAKE</span></button>
+        <button class="pedal gas" id="pedal-gas" aria-label="Gas"><svg viewBox="0 0 80 170" aria-hidden="true">
+          <rect x="34" y="0" width="12" height="30" rx="4" fill="#4a4d52"/>
+          <rect x="8" y="24" width="64" height="140" rx="12" fill="#26282c" stroke="#5a5e64" stroke-width="4"/>
+          <g fill="#121315"><rect x="18" y="36" width="44" height="6" rx="3"/><rect x="18" y="49" width="44" height="6" rx="3"/><rect x="18" y="62" width="44" height="6" rx="3"/><rect x="18" y="75" width="44" height="6" rx="3"/><rect x="18" y="88" width="44" height="6" rx="3"/><rect x="18" y="101" width="44" height="6" rx="3"/><rect x="18" y="114" width="44" height="6" rx="3"/><rect x="18" y="127" width="44" height="6" rx="3"/><rect x="18" y="140" width="44" height="6" rx="3"/></g>
+          <rect x="12" y="28" width="56" height="9" rx="4.5" fill="#ffffff" opacity=".08"/>
+        </svg><span class="lbl">GAS</span></button>
       </div>
     </div>
     <div id="weapon-chip" class="glass"><div id="weapon-name">BLASTER</div><div id="weapon-stars"></div><div id="weapon-rate"></div></div>
@@ -314,10 +356,13 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #0d1014; }
       <span class="glass"><b>🪜</b>Climb to the roofs</span>
       <span class="glass"><b>🦍</b>Turn into Kong!</span>
     </div>
-    <button class="big-btn" id="play-btn">PLAY</button>
+    <div class="mode-btns">
+      <button class="big-btn" id="play-btn">PLAY STORY</button>
+      <button class="big-btn free" id="free-btn">FREE PLAY</button>
+    </div>
     <div id="city-picker"></div>
     <button class="small-btn" id="reset-btn">Start over</button>
-    <div class="ver">Version 20261003-2027</div>
+    <div class="ver">Version 20261005-1346</div>
   </div>
 
   <div class="screen" id="win" hidden>

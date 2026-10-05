@@ -67,7 +67,7 @@ function destroyNest(n) {
   popWord(n.big ? 'BASE DESTROYED!' : 'NEST DESTROYED!', n.pos.clone().setY(n.big ? 12 : 6), '#ff9a3d', n.big ? 7 : 4);
   dropLoot(n.pos.clone().add(new V3(rnd(-2, 2), 0, rnd(-2, 2))), pick(['soldier2', 'auto', 'power', 'armor']));
   if (n.big) dropLoot(n.pos.clone().add(new V3(4, 0, 0)), 'soldier5');
-  setTimeout(() => scene.remove(n.g), 600);
+  setTimeout(() => freeNest(n), 600);
   world.onNestDestroyed?.(n);
 }
 
@@ -94,8 +94,14 @@ export function updateNests(dt) {
 }
 const whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1 });
 
+/* Nest shapes are made per nest, so free them when it's gone (materials are shared and kept). */
+function freeNest(n) {
+  scene.remove(n.g);
+  n.g.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+}
+
 export function clearNests() {
-  for (const n of world.nests) scene.remove(n.g);
+  for (const n of world.nests) freeNest(n);
   world.nests = [];
 }
 

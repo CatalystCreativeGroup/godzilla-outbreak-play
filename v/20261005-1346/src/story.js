@@ -28,17 +28,20 @@ function openNext() {
   $('dialog').hidden = false;
   say(text);
   sfx.pickup();
-  const ok = $('dialog-ok');
-  const close = () => {
-    ok.removeEventListener('click', close);
-    $('dialog').hidden = true;
-    world.paused = false;
-    if ('speechSynthesis' in window) speechSynthesis.cancel();
-    then?.();
-    openNext();
-  };
-  ok.addEventListener('click', close);
+  current = then || null;
+  $('btn-act').hidden = true;
 }
+/* One OK handler for every dialog (an old dialog's callback can never fire on a new level). */
+let current = null;
+$('dialog-ok').addEventListener('click', () => {
+  if ($('dialog').hidden) return;
+  const then = current; current = null;
+  $('dialog').hidden = true;
+  world.paused = false;
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  then?.();
+  openNext();
+});
 export function dialog(who, text, then) {
   queue.push({ who, text, then });
   openNext();
@@ -64,14 +67,16 @@ function spawnClue(pos) {
 }
 function remove(thing) {
   if (!thing) return;
+  if (thing.mark) { thing.mark.material.dispose(); }
   if (thing.model) disposeModel(thing.model);
-  if (thing.mesh) scene.remove(thing.mesh);
+  if (thing.mesh) { scene.remove(thing.mesh); thing.mesh.material.dispose(); }
   if (thing.beam) scene.remove(thing.beam);
 }
 
 export function clearStory() {
   if (story) { remove(story.npc); remove(story.clue); if (story.hqBeam) scene.remove(story.hqBeam); if (story.raidBeam) scene.remove(story.raidBeam); }
   queue.length = 0;
+  current = null;
   $('dialog').hidden = true;
   world.paused = false;
   story = null;
@@ -108,7 +113,8 @@ export function npcNear() {
 
 export function talk() {
   const npc = npcNear();
-  if (!npc) return;
+  if (!npc || world.paused || !$('dialog').hidden || npc.talking) return;
+  npc.talking = true;
   const s = story.script;
   if (story.stage === 'witness') {
     dialog(s.witness[0], s.witness[1], () => {
@@ -120,6 +126,7 @@ export function talk() {
   } else if (story.stage === 'informant') {
     dialog(s.informant[0], s.informant[1], () => {
       remove(npc); story.npc = null;
+      if (story.stage !== 'informant') return;
       if (s.raid) openRaid(); else openHq();
     });
   }
@@ -154,7 +161,7 @@ function updateRaid() {
     remove(story.clue); story.clue = null;
     sparks(R.pos.clone().setY(1.5), 0xffd23f, 16, 6, 0.4);
     const c = story.script.raid.clue;
-    dialog(c[0], c[1], openHq);
+    dialog(c[0], c[1], () => { if (story?.stage === 'reading') openHq(); });
     story.stage = 'reading';
   }
 }

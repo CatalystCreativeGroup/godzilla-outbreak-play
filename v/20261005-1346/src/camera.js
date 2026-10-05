@@ -7,7 +7,7 @@ import { EYE, firstPerson } from './hero.js';
 import { loadout } from './world.js';
 
 /* How much each gun zooms in when aiming down the sights (scopes zoom the most). */
-const ZOOM = { blaster: 1.35, rifle: 1.9, shotgun: 1.25, bazooka: 2.3, lightning: 1.4, freeze: 1.4 };
+const ZOOM = { blaster: 1.5, rifle: 3, shotgun: 1.35, bazooka: 2.5, lightning: 1.5, freeze: 1.5 };
 
 const camPos = new V3(0, 40, 60), camLook = new V3();
 let lastFov = 0, lastNear = 0;
@@ -49,7 +49,7 @@ const CHASE = { car: [9, 3.8, 1.6], tank: [13, 6, 2.5], jet: [24, 6.5, 2] }; // 
 function vehicleCamera(dt) {
   const v = P.vehicle;
   P.lookT = Math.max(0, (P.lookT || 0) - dt);
-  if (P.lookT <= 0 && v.type !== 'tank') P.yaw = turnToward(P.yaw, v.yaw, dt * 2.5);
+  if (P.lookT <= 0) P.yaw = turnToward(P.yaw, v.yaw, dt * (v.type === 'tank' ? 2 : 4.5));
   const [back, up, lookUp] = CHASE[v.type];
   const fwd = new V3(Math.sin(P.yaw), 0, Math.cos(P.yaw));
   const want = v.pos.clone().addScaledVector(fwd, -back).setY(v.alt + up - P.pitch * 4);
@@ -62,7 +62,7 @@ function vehicleCamera(dt) {
 
 function outsideCamera(dt) {
   if (P.vehicle) return vehicleCamera(dt);
-  const bossOn = world.state === 'boss' || world.state === 'bossIntro';
+  const bossOn = !!world.bossTarget?.alive && Math.hypot(world.bossTarget.pos.x - P.pos.x, world.bossTarget.pos.z - P.pos.z) < 60;
   const fwd = new V3(Math.sin(P.yaw), 0, Math.cos(P.yaw)), right = new V3(-Math.cos(P.yaw), 0, Math.sin(P.yaw));
   const a = P.kong ? 0 : (P.adsT || 0); // aiming pulls the camera in over the shoulder
   const back = P.kong ? 21 : (bossOn ? 8.5 : 6.2) * (1 - a) + 3.0 * a;
@@ -90,7 +90,7 @@ export function updateCamera(dt) {
     P.yaw = turnToward(P.yaw, angleTo(P.pos, boss.pos), dt * 3);
     P.pitch += (0.18 - P.pitch) * Math.min(1, dt * 2);
   }
-  const zoom = 1 + ((ZOOM[loadout.current] || 1.4) - 1) * (P.adsT || 0);
+  const zoom = P.vehicle || P.kong ? 1 : 1 + ((ZOOM[loadout.current] || 1.4) - 1) * (P.adsT || 0);
   if (firstPerson()) {
     setLens((portrait ? 78 : 62) / zoom, 0.08);
     firstPersonCamera(dt);

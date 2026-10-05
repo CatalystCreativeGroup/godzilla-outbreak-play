@@ -18,8 +18,13 @@ export function teamMul() {
 }
 
 /* Things bullets can hit: monsters plus the boss when it's in the fight. */
+let cacheTime = -1, cache = [];
+/* Built once per frame and shared (bullets and soldiers ask many times a frame). */
 export function liveTargets() {
+  if (cacheTime === world.time) return cache;
+  cacheTime = world.time;
   const list = world.enemies.filter(e => e.alive && !e.removed);
+  cache = list;
   for (const n of world.nests) if (n.alive) list.push(n);
   if (world.bossTarget && world.bossTarget.alive) list.push(world.bossTarget);
   return list;
@@ -57,9 +62,11 @@ function spawnShot({ from, dir, speed, damage, color, life, kind = 'bullet', spl
   shots.push({ m, dir: dir.clone().normalize(), speed, damage, color, life, kind, splash, element, slow, hostile, prev: from.clone() });
 }
 
+const _ab = new V3(), _ac = new V3(), _p = new V3(), _c = new V3();
 function segmentHitsSphere(a, b, c, r) {
-  const ab = b.clone().sub(a), t = Math.max(0, Math.min(1, c.clone().sub(a).dot(ab) / Math.max(1e-6, ab.lengthSq())));
-  return a.clone().addScaledVector(ab, t).distanceToSquared(c) < r * r;
+  _ab.subVectors(b, a);
+  const t = Math.max(0, Math.min(1, _ac.subVectors(c, a).dot(_ab) / Math.max(1e-6, _ab.lengthSq())));
+  return _p.copy(a).addScaledVector(_ab, t).distanceToSquared(c) < r * r;
 }
 
 export function explode(pos, radius, damage, element) {
@@ -70,6 +77,13 @@ export function explode(pos, radius, damage, element) {
     if (d < radius) t.hit(damage * (1 - Math.max(0, d) / radius * 0.5), { element, from: pos, heavy: true });
   }
   smashNear(pos, radius * 0.25);
+}
+
+/* Crates near a bullet (crates are many, so only nearby ones are checked). */
+function nearbyCrates(pos) {
+  const out = [];
+  for (const c of world.breakables) if (c.alive && Math.abs(c.pos.x - pos.x) < 20 && Math.abs(c.pos.z - pos.z) < 20) out.push(c);
+  return out;
 }
 
 /* Who can monster spit hit? Joseph and his army. */
@@ -86,9 +100,9 @@ export function updateShots(dt) {
     if (s.kind === 'rocket' && Math.random() < 0.7) smoke(s.m.position.clone(), 1, 0.6, 0xd8d2c8, 0.1, 1);
     let done = s.life <= 0 || s.m.position.y < 0;
     let hitSomething = false;
-    const list = s.hostile ? hostileTargets() : liveTargets().concat(world.breakables.filter(c => c.alive && c.pos.distanceToSquared(s.m.position) < 400));
+    const list = s.hostile ? hostileTargets() : liveTargets().concat(nearbyCrates(s.m.position));
     for (const t of list) {
-      const c = new V3(t.pos.x, t.pos.y + t.aimY, t.pos.z);
+      const c = _c.set(t.pos.x, t.pos.y + t.aimY, t.pos.z);
       if (!segmentHitsSphere(s.prev, s.m.position, c, t.radius)) continue;
       done = hitSomething = true;
       if (s.hostile) { t.hurt(s.damage, s.prev); sparks(s.m.position.clone(), s.color, 6, 5, 0.4); }

@@ -1,11 +1,12 @@
 // Godzilla Outbreak: level flow, controls wiring and the main loop.
+import './ipad.js';
 import * as THREE from 'three';
-import { renderer, scene, camera, applyTheme, followSun, QUALITY } from './engine.js';
+import { renderer, scene, camera, applyTheme, followSun, QUALITY, resize } from './engine.js';
 import { GAME, WEAPONS } from './settings.js';
 import { LEVELS, MISSION_TEXT } from './levels.js';
 import { V3, rnd, world, P, loadout, $ } from './world.js';
 import { loadModels, updateCulling } from './models.js';
-import { buildWorld, updateMap, resetBuildings, ladderNear, DISTRICTS } from './map.js';
+import { buildWorld, updateMap, resetBuildings, ladderNear, DISTRICTS, nearestRoadPoint } from './map.js';
 import { setMapTheme } from './map-props.js';
 import { updateFx, setMoteColor, sparks } from './fx.js';
 import { initAudio, sfx, say, toggleSound } from './audio.js';
@@ -20,10 +21,11 @@ import { setupMission, updateMissions, updateBossIntro, objective, clearMission,
 import { updateNests } from './nests.js';
 import { scatterCrates } from './crates.js';
 import { setupVehicles, updateVehicles, vehicleNear, enterVehicle, exitVehicle, vehicleVictim, clearBombs } from './vehicles.js';
-import { initMinimap, updateMinimap } from './minimap.js';
+import { initMinimap, updateMinimap, setBig } from './minimap.js';
 import { updateStory, talk, npcNear, endingLine, dialog } from './story.js';
 import { initDriveControls, showDriveControls, driveInput } from './drive-controls.js';
-import { updateHud, updateWeaponHud, setKongControls, setVehicleControls, setAction, banner, flashScreen, hurtFlash, showScreen, renderLevelPicker, initInput, moveInput, resetHudCache, updateCompass } from './hud.js';
+import { startFreePlay, updateFreePlay, freeBossDefeated, restoreStoryLoadout, freeStats } from './freeplay.js';
+import { updateHud, updateWeaponHud, setKongControls, setVehicleControls, setAction, banner, flashScreen, hurtFlash, showScreen, renderLevelPicker, initInput, moveInput, resetHudCache, updateCompass, resetInput } from './hud.js';
 import { loadSave, applySave, writeSave, nextLevelIndex, resetSave } from './save.js';
 
 const START = new V3(-4, 0, 12); // on the street at the south edge of the downtown park
@@ -34,8 +36,11 @@ Object.assign(world, {
   banner, flash: flashScreen, hurtFlash, hurtPlayer,
   setKongMode: isKong => { setKongControls(isKong); setVehicleControls(null); },
   onWeaponChange: () => { equipGun(); updateWeaponHud(); writeSave(); },
-  onEnemyDefeated: () => addPower(GAME.power.perMonster),
-  onBossDefeated: winLevel,
+  onEnemyDefeated: () => { addPower(GAME.power.perMonster); if (world.mode === 'free') freeStats.kills++; },
+  onNestDestroyed: () => { if (world.mode === 'free') freeStats.bases++; },
+  onBossDefeated: () => (world.mode === 'free' ? freeBossDefeated() : winLevel()),
+  fastTravel,
+  onAimChange: on => $('btn-aim').classList.toggle('on', on),
   onVehicleChange: () => { setVehicleControls(P.vehicle); showDriveControls(P.vehicle?.type); },
   spawnSoldiers,
 });
@@ -82,6 +87,9 @@ function prepareLevel(index) {
 }
 
 function startLevel(index) {
+  restoreStoryLoadout();
+  world.mode = 'story';
+  setBig(false); resetInput(); toggleAim(false);
   initAudio();
   try { navigator.wakeLock?.request('screen').catch(() => {}); } catch (e) { /* not supported */ }
   const level = prepareLevel(index);
@@ -125,14 +133,47 @@ function winLevel() {
   }, 1600);
 }
 
+/* FREE PLAY: the whole city, everything unlocked, endless monsters and roaming bosses. */
+function startFree() {
+  setBig(false); resetInput(); toggleAim(false);
+  initAudio();
+  try { navigator.wakeLock?.request('screen').catch(() => {}); } catch (e) { /* not supported */ }
+  prepareLevel(0);
+  applyTheme('day'); setMapTheme('day');
+  resetHero(START);
+  gatherAllies();
+  setKongControls(false);
+  setVehicleControls(null);
+  showDriveControls(null);
+  startFreePlay();
+  equipGun(); updateWeaponHud();
+  resetHudCache();
+  showScreen(null);
+  banner('FREE PLAY!<small>Every gun, car, tank and jet. Hunt the Godzillas! Tap the map to travel.</small>', 4200);
+  say('Free play! Hunt the Godzillas!');
+}
+
+/* Free play: tap a part of the city on the big map to go there. */
+function fastTravel(districtId) {
+  const d = DISTRICTS[districtId];
+  if (!d || world.mode !== 'free') return;
+  if (P.vehicle) exitVehicle();
+  P.pos.copy(nearestRoadPoint(d.arena[0] + 30, d.arena[1] + 30));
+  P.y = 0; P.vy = 0; P.parachute = false;
+  banner(`${d.name}`, 1800);
+}
+
 function showTitle() {
+  restoreStoryLoadout();
+  world.mode = 'story';
+  setBig(false); resetInput(); toggleAim(false);
   world.state = 'title';
   prepareLevel(nextLevelIndex());
   resetHero(new V3(0, 0, 12));
   setKongControls(false);
   gatherAllies();
   showScreen('title');
-  $('play-btn').textContent = loadout.levelsBeaten.length ? `CONTINUE (LEVEL ${nextLevelIndex() + 1})` : 'PLAY';
+  $('play-btn').textContent = loadout.levelsBeaten.length ? `STORY: LEVEL ${nextLevelIndex() + 1}` : 'PLAY STORY';
   renderLevelPicker(i => startLevel(i));
 }
 
@@ -154,6 +195,7 @@ function swapWeapon(dir = 1) {
 }
 /* The action button does whatever makes sense right here. */
 function contextAction() {
+  if (world.paused || P.climb) return null;
   if (P.vehicle) return { label: '🚪 EXIT', run: exitVehicle };
   if (npcNear()) return { label: '💬 TALK', run: talk };
   const v = vehicleNear();
@@ -172,6 +214,15 @@ initInput({
 });
 window.addEventListener('keydown', e => { if (e.code === 'KeyG' && (world.state === 'mission' || world.state === 'boss')) contextAction()?.run(); });
 $('play-btn').addEventListener('click', () => startLevel(nextLevelIndex()));
+$('free-btn').addEventListener('click', startFree);
+// home: two taps go back to the title screen
+let homeArmed = null;
+$('btn-home').addEventListener('click', () => {
+  if (!homeArmed) { banner('Tap 🏠 again to go home', 1500); homeArmed = setTimeout(() => { homeArmed = null; }, 2000); return; }
+  clearTimeout(homeArmed); homeArmed = null;
+  if (P.vehicle) exitVehicle();
+  showTitle();
+});
 $('next-btn').addEventListener('click', () => startLevel(Math.min(world.levelIndex + 1, LEVELS.length - 1)));
 $('title-btn').addEventListener('click', showTitle);
 $('again-btn').addEventListener('click', () => startLevel(LEVELS.length - 1));
@@ -226,17 +277,17 @@ function update(dt) {
     if (world.state !== 'win' && world.state !== 'ending') { updateEnemies(dt); updateShots(dt); updateNests(dt); }
     updateBoss(dt);
     updateLoot(dt);
-    updateMissions(dt);
-    updateStory(dt);
+    if (world.mode === 'free') updateFreePlay(dt); else { updateMissions(dt); updateStory(dt); }
     if (world.state === 'bossIntro') updateBossIntro(dt);
     updateArrow();
     updateHud();
     setAction(live ? contextAction()?.label : null);
-    updateMinimap();
+    updateMinimap(dt);
   }
   updateMap(dt, camera, !firstPerson());
   const focus = world.state === 'title' || world.state === 'loading' ? new V3(0, 0, 6) : P.pos;
   updateFx(dt, focus);
+  resize(); // cheap: only does work when the screen size really changed
   updateCamera(dt);
   updateCulling(camera);
   followSun(focus);

@@ -14,8 +14,8 @@ import { smoke, fireball, sparks, flash, shake, popWord } from './fx.js';
 import { V3, rnd, clamp, world, P, flatDist, turnToward, angleTo } from './world.js';
 
 export const VEHICLE_TYPES = {
-  car:  { label: '🚗 DRIVE', hp: 30, maxSpeed: 32, accel: 20, turn: 1.9, radius: 2.0, ram: 2.6, seatY: 1.3 },
-  tank: { label: '🪖 TANK',  hp: 90, maxSpeed: 14, accel: 9,  turn: 1.2, radius: 3.0, ram: 3.6, seatY: 2.6, cannon: 1.1 },
+  car:  { label: '🚗 DRIVE', hp: 30, maxSpeed: 19, accel: 11, turn: 2.6, radius: 2.0, ram: 2.6, seatY: 1.3 },
+  tank: { label: '🪖 TANK',  hp: 90, maxSpeed: 11, accel: 7,  turn: 1.7, radius: 3.0, ram: 3.6, seatY: 2.6, cannon: 1.1 },
   jet:  { label: '✈️ FLY',   hp: 60, maxSpeed: 55, accel: 14, turn: 1.1, radius: 4.5, ram: 0,   seatY: 2.0, bombs: 0.55 },
 };
 
@@ -169,10 +169,12 @@ function drive(v, drv, dt) {
   if (drv.brake) v.speed -= (v.speed > 0.5 ? t.accel * 2.2 : t.accel * 0.8) * dt;
   if (!drv.gas && !drv.brake) v.speed *= Math.pow(0.45, dt);
   v.speed = clamp(v.speed, -t.maxSpeed * 0.4, t.maxSpeed);
-  // easier steering: full lock at low speed, gentler when going fast
-  const grip = Math.min(1, Math.abs(v.speed) / 5);
-  const gentle = 1 - 0.5 * Math.min(1, Math.abs(v.speed) / t.maxSpeed);
-  v.yaw -= drv.steer * t.turn * grip * gentle * dt * Math.sign(v.speed || 1);
+  // steering: turns well even when slow, a little gentler at top speed; tanks can turn on the spot
+  const grip = v.type === 'tank' ? 1 : Math.min(1, 0.35 + Math.abs(v.speed) / 4);
+  const gentle = 1 - 0.25 * Math.min(1, Math.abs(v.speed) / t.maxSpeed);
+  const dir = v.speed < -0.5 ? -1 : 1;
+  v.yaw -= drv.steer * t.turn * grip * gentle * dt * dir;
+  if (Math.abs(drv.steer) > 0.6 && v.speed > t.maxSpeed * 0.7) v.speed *= Math.pow(0.7, dt); // ease off in hard turns
   const before = v.pos.clone();
   v.pos.x += Math.sin(v.yaw) * v.speed * dt;
   v.pos.z += Math.cos(v.yaw) * v.speed * dt;
@@ -229,7 +231,7 @@ function fly(v, inp, dt) {
     v.climb += ((-inp.z) * 18 - v.climb) * Math.min(1, dt * 2);
     v.alt = clamp(v.alt + v.climb * dt, 0.6, 140);
     const ground = groundAt(v.pos.x, v.pos.z, 999);
-    if (v.alt < ground + 8) { v.alt = ground + 8; v.climb = Math.max(v.climb, 4); }
+    if (v.alt < ground + 8) { v.alt += Math.min(ground + 8 - v.alt, 30 * dt); v.climb = Math.max(v.climb, 6); }
     if (v.alt < 3 && v.climb < 0) v.climb = 0;
   }
   v.pos.x += Math.sin(v.yaw) * v.speed * dt;

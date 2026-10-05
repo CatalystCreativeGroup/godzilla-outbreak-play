@@ -7,12 +7,21 @@ import { world, P, $ } from './world.js';
 const DISTRICT_COLORS = {
   downtown: '#3a3f47', residential: '#2f4a2c', harbor: '#2e3a40', airport: '#3b3f3a', military: '#3a3d2a', volcano: '#4a2418',
 };
-let ctx = null, canvas = null, big = false, frame = 0;
+let ctx = null, canvas = null, big = false, frame = 0, lastScale = 0, bigT = 0;
 
 export function initMinimap() {
   canvas = $('minimap');
   ctx = canvas.getContext('2d');
-  canvas.addEventListener('click', () => { big = !big; canvas.classList.toggle('big', big); resize(); });
+  canvas.addEventListener('click', e => {
+    // free play: tap a part of the city on the big map to travel there
+    if (big && world.mode === 'free' && lastScale) {
+      const r = canvas.getBoundingClientRect(), k = canvas.width / r.width;
+      const x = ((e.clientX - r.left) * k - canvas.width / 2) / lastScale, z = ((e.clientY - r.top) * k - canvas.height / 2) / lastScale;
+      const hit = Object.entries(DISTRICTS).find(([, d]) => x >= d.x0 && x <= d.x1 && z >= d.z0 && z <= d.z1);
+      if (hit) { world.fastTravel?.(hit[0]); }
+    }
+    setBig(!big);
+  });
   resize();
 }
 function resize() {
@@ -55,14 +64,22 @@ function polygon(pts, toScreen) {
 
 function dot(p, r, color) { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, Math.PI * 2); ctx.fill(); }
 
-export function updateMinimap() {
-  if (!ctx || (frame++ % 2 && !big)) return;
+/* The big map closes by itself after a few seconds, and never carries over to the next level. */
+export function setBig(on) {
+  big = !!on; bigT = 0;
+  if (canvas) { canvas.classList.toggle('big', big); resize(); }
+}
+
+export function updateMinimap(dt = 0.016) {
+  if (big && (bigT += dt) > 7) setBig(false);
+  if (!ctx || frame++ % (big ? 3 : 2)) return;
   // it was hidden while loading: measure again once it's on screen
   if (canvas.clientWidth && Math.abs(canvas.width - canvas.clientWidth * Math.min(window.devicePixelRatio || 1, 2)) > 2) resize();
   const W = canvas.width, H = canvas.height, px = W / (big ? 600 : 150);
   ctx.clearRect(0, 0, W, H);
   const radius = big ? WORLD + 40 : (P.vehicle?.type === 'jet' ? 220 : P.vehicle ? 150 : 100);
   const scale = (Math.min(W, H) / 2) / radius;
+  if (big) lastScale = scale;
   const cx = W / 2, cy = H / 2;
   // small map turns with Joseph (forward is up); the big map is north-up
   const yaw = big ? Math.PI : P.yaw, cos = Math.cos(yaw), sin = Math.sin(yaw);
@@ -80,6 +97,7 @@ export function updateMinimap() {
   if (big) {
     ctx.font = `${12 * px}px "Russo One", sans-serif`; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,0.85)';
     for (const d of Object.values(DISTRICTS)) { const p = toScreen((d.x0 + d.x1) / 2, (d.z0 + d.z1) / 2); ctx.fillText(d.name, p[0], p[1]); }
+    if (world.mode === 'free') { ctx.fillStyle = '#ffc23d'; ctx.fillText('TAP A PLACE TO TRAVEL THERE', W / 2, 18 * px); }
   }
   const inView = p => big || Math.hypot(p[0] - cx, p[1] - cy) < Math.min(W, H) / 2 - 4 * px;
   for (const v of world.vehicles || []) {

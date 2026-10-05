@@ -4,6 +4,7 @@ import { LEVELS } from './levels.js';
 import { firstPerson } from './hero.js';
 import { $, world, P, loadout } from './world.js';
 import { missionStatus } from './missions.js';
+import { freeStats } from './freeplay.js';
 import { bossHealthFraction, bossName } from './boss.js';
 
 const last = {};
@@ -32,20 +33,21 @@ export function updateHud() {
     $('meter').classList.toggle('kong', P.kong);
     $('btn-morph').classList.toggle('ready', ready);
   });
-  const ms = missionStatus();
+  const ms = world.mode === 'free' ? { icon: '🆓', done: 0, total: 0, text: `💀 ${freeStats.kills}  🦖 ${freeStats.bosses}  🥚 ${freeStats.bases}` } : missionStatus();
   setIfChanged('mission', `${ms.icon}${ms.done}/${ms.total}/${world.allies.length}/${ms.text || ''}`, () => {
     $('m-camps').innerHTML = ms.text ? `<span class="ic">${ms.icon}</span><b>${ms.text}</b>` : `<span class="ic">${ms.icon}</span><b>${ms.done}/${ms.total}</b>`;
     $('m-army').innerHTML = `<span class="ic">🪖</span><b>${world.allies.length}/${GAME.army.maxSize}</b>`;
     $('m-camps').classList.toggle('done', ms.total > 0 && ms.done >= ms.total);
   });
-  const bossOn = world.state === 'boss' || (world.state === 'bossIntro' && world.bossTarget);
+  const bossOn = !!world.bossTarget;
   setIfChanged('bossOn', !!bossOn, on => { $('boss-bar').hidden = !on; $('boss-name').textContent = bossName(); });
   if (bossOn) {
     const hp = Math.round(bossHealthFraction() * 100);
     setIfChanged('bossHp', hp, v => { $('boss-fill').style.width = v + '%'; $('boss-bar').classList.toggle('mad', v <= 50); });
   }
   setIfChanged('roarCool', P.kong && P.roarCd > 0, c => $('btn-a').classList.toggle('cool', c));
-  const showCross = P.vehicle ? P.vehicle.type === 'tank' : (firstPerson() || !P.kong);
+  setIfChanged('sight', sightMode(), m => { $('scope').hidden = m !== 'scope'; $('holo').hidden = m !== 'holo'; });
+  const showCross = sightMode() ? false : P.vehicle ? P.vehicle.type === 'tank' : (firstPerson() || !P.kong);
   setIfChanged('crosshair', (P.ads ? 'a' : '') + (showCross ? (world.aimTarget && !P.vehicle ? 'on' : 'off') : 'hidden'), v => {
     v = v.replace(/^a/, '');
     $('crosshair').hidden = v === 'hidden';
@@ -55,6 +57,12 @@ export function updateHud() {
 }
 
 /* First person: an arrow at the top of the screen points to the next camp (or the boss). */
+/* While aiming down the sights: a real scope (rifle, bazooka) or a red holographic sight (other guns). */
+export function sightMode() {
+  if (!firstPerson() || P.kong || P.vehicle || (P.adsT || 0) < 0.85) return '';
+  return loadout.current === 'rifle' || loadout.current === 'bazooka' ? 'scope' : 'holo';
+}
+
 export function updateCompass(target) {
   const el = $('compass');
   const show = !!target && firstPerson();
@@ -110,6 +118,7 @@ export function showScreen(id) {
   const inGame = !id;
   $('hud').hidden = !inGame; $('controls').hidden = !inGame;
   $('minimap').hidden = !inGame;
+  resetInput();
 }
 
 /* Level buttons on the title screen: beaten levels get a check, the next one is open, later ones are locked. */
@@ -150,11 +159,13 @@ export function setVehicleControls(v) {
 
 /* ---------- input ---------- */
 const stick = { id: null, ox: 0, oy: 0, x: 0, y: 0 };
+const lookDrag = { id: null, x: 0, y: 0 };
 const keys = new Set();
 const STICK_R = 60;
 const capture = (el, e) => { try { el.setPointerCapture(e.pointerId); } catch (err) { /* finger already gone */ } };
 
 export function initInput(actions) {
+  window.addEventListener('controls-changed', resetInput);
   const zone = $('stick-zone'), base = $('stick-base'), knob = $('stick-knob');
   zone.addEventListener('pointerdown', e => {
     e.preventDefault();
@@ -178,6 +189,7 @@ export function initInput(actions) {
   };
   zone.addEventListener('pointerup', stickUp);
   zone.addEventListener('pointercancel', stickUp);
+  zone.addEventListener('lostpointercapture', stickUp);
 
   const pad = (id, fn) => {
     const el = $(id);
@@ -199,7 +211,7 @@ export function initInput(actions) {
 
   // LOOK: drag the right side of the screen to turn and aim
   const look = $('look-zone');
-  const drag = { id: null, x: 0, y: 0 };
+  const drag = lookDrag;
   look.addEventListener('pointerdown', e => {
     e.preventDefault();
     if (drag.id !== null) return;
@@ -209,7 +221,8 @@ export function initInput(actions) {
   look.addEventListener('pointermove', e => {
     if (e.pointerId !== drag.id) return;
     // slower look while aiming down the sights, and a little sticky when the crosshair is on a monster
-    const k = 0.0055 * GAME.controls.lookSpeed * (P.ads ? 0.45 : 1) * (world.aimTarget ? 0.7 : 1);
+    const scoped = loadout.current === 'rifle' || loadout.current === 'bazooka';
+    const k = 0.0055 * GAME.controls.lookSpeed * (P.ads ? (scoped ? 0.3 : 0.45) : 1) * (world.aimTarget ? 0.7 : 1);
     P.lookActive = 0.15;
     P.yaw -= (e.clientX - drag.x) * k;
     P.lookT = 1.5; // while driving, the camera stays where you looked for a moment
@@ -219,6 +232,7 @@ export function initInput(actions) {
   const lookUp = e => { if (e.pointerId === drag.id) drag.id = null; };
   look.addEventListener('pointerup', lookUp);
   look.addEventListener('pointercancel', lookUp);
+  look.addEventListener('lostpointercapture', lookUp);
 
   window.addEventListener('keydown', e => {
     keys.add(e.code);
@@ -236,6 +250,14 @@ export function initInput(actions) {
   window.addEventListener('keyup', e => { keys.delete(e.code); if (e.code === 'KeyF' || e.code === 'Enter') P.firing = false; });
   window.addEventListener('blur', () => { keys.clear(); P.firing = false; });
   document.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+/* Forget any finger that was down (screens changing, controls hidden): no stuck walking or looking. */
+export function resetInput() {
+  stick.id = null; stick.x = stick.y = 0;
+  const knob = $('stick-knob'); if (knob) knob.style.transform = '';
+  lookDrag.id = null;
+  P.firing = false;
 }
 
 export function moveInput(dt = 0) {

@@ -45,6 +45,7 @@ export function applySave(s) {
 }
 
 export function writeSave() {
+  if (world.mode === 'free') return; // free play doesn't change the story save
   try {
     localStorage.setItem(KEY, JSON.stringify({
       owned: loadout.owned, levels: loadout.levels, rateLevel: loadout.rateLevel, fullAuto: loadout.fullAuto,

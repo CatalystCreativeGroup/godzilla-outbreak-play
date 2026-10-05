@@ -229,6 +229,7 @@ export function updateMissions(dt) {
 
 function startBossIntro() {
   world.state = 'bossIntro'; introT = 0;
+  P.inv = Math.max(P.inv, 7); // can't move during the boss's arrival, so nothing can hurt Joseph either
   world.banner?.('MISSION COMPLETE!<small>Get ready...</small>', 2400);
   say('Mission complete! Get ready!');
   sfx.save();

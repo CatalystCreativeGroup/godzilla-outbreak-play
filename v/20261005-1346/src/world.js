@@ -20,6 +20,7 @@ export function turnToward(current, target, rate) {
 
 export const world = {
   state: 'title',      // title | intro | mission | bossIntro | boss | win | ending
+  mode: 'story',       // story | free
   time: 0,
   levelIndex: 0,
   level: null,         // settings for the current level (see levels.js)

@@ -85,7 +85,9 @@ function updateOne(e, dt) {
 
   e.flashT -= dt; e.slowT -= dt; e.attackCd -= dt;
   if (e.leap) { updateLeap(e, dt); e.model.anim.update(dt); return; }
-  const glow = e.flashT > 0 ? [0xffffff, 0.6] : e.slowT > 0 ? [0x4fc8ff, 0.5] : null;
+  // looking through a scope shows monsters glowing red (infrared), brightest on the one in the sights
+  const thermal = (P.adsT || 0) > 0.6 && !P.kong ? [0xff2a10, world.aimTarget === e ? 1.1 : 0.45] : null;
+  const glow = e.flashT > 0 ? [0xffffff, 0.6] : e.slowT > 0 ? [0x4fc8ff, 0.5] : thermal;
   if (glow) { setGlow(e.model, glow[0], glow[1]); e.frozenGlow = true; }
   else if (e.frozenGlow) { setGlow(e.model, 0x000000, 0); e.frozenGlow = false; }
 

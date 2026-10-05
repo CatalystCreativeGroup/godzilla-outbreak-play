@@ -68,10 +68,13 @@ export function toggleAim(force) {
   const want = typeof force === 'boolean' ? force : !P.ads;
   if (want && (P.vehicle || P.kong || P.climb || P.morphT > 0)) return;
   P.ads = want;
+  P.adsIdle = 0;
   if (want) sfx.pickup();
+  world.onAimChange?.(want);
 }
 
-export const firstPerson = () => world.view === 'first' && !P.kong && !P.vehicle && world.state !== 'title';
+// aiming down the sights always looks through the gun, even in the outside view
+export const firstPerson = () => (world.view === 'first' || P.ads) && !P.kong && !P.vehicle && world.state !== 'title';
 
 /* ---------- actions ---------- */
 export function heroJump() {
@@ -222,7 +225,9 @@ function shoot() {
   const w = WEAPONS[loadout.current];
   const dir = aimDirection();
   const target = findAimTarget(eyePoint(), dir, w.range);
-  const muzzle = firstPerson() ? gunMuzzle(viewGun, new V3()) : gunMuzzle(handGun, new V3());
+  // looking through the sight: the shot leaves from the middle of the screen, exactly where the dot is
+  const throughSight = firstPerson() && P.adsT > 0.85;
+  const muzzle = throughSight ? eyePoint().addScaledVector(dir, 0.6) : firstPerson() ? gunMuzzle(viewGun, new V3()) : gunMuzzle(handGun, new V3());
   // no monster near the crosshair: shoot at the point straight ahead
   const goal = target || { pos: eyePoint().addScaledVector(dir, w.range).setY(0), aimY: P.y + EYE + dir.y * w.range, radius: 0, hit() {} };
   fireWeapon(loadout.current, loadout.levels[loadout.current] || 1, muzzle, goal);
@@ -268,7 +273,6 @@ function updateJoseph(dt, inp) {
   if (P.climb) updateClimb(dt); else updateFalling(dt);
   P.fireCd -= dt; P.aimT -= dt;
   P.recoil = Math.max(0, P.recoil - dt * 6);
-  P.adsT += ((P.ads ? 1 : 0) - P.adsT) * Math.min(1, dt * 10);
   P.lookActive = Math.max(0, (P.lookActive || 0) - dt);
   aimMagnet(dt);
   P.kick = Math.max(0, (P.kick || 0) - dt * 0.6);
@@ -302,7 +306,7 @@ function placeGuns(dt, inp) {
   handGun.visible = joseph.root.visible;
 
   const fp = firstPerson() && P.ko <= 0 && P.morphT <= 0;
-  viewGun.visible = fp;
+  viewGun.visible = fp && P.adsT < 0.85; // fully aimed: you look through the sight overlay instead
   if (!fp) return;
   const bob = inp && inp.l > 0.12 && P.y < 0.1 ? world.time * 11 : 0;
   const swayX = Math.sin(bob) * 0.012 * (inp?.l || 0), swayY = Math.abs(Math.cos(bob)) * 0.012 * (inp?.l || 0);
@@ -330,6 +334,11 @@ function updateKong(dt, inp) {
 }
 
 export function updateHero(dt, inp) {
+  // aiming eases in and out every frame, whatever Joseph is doing (so the zoom can never get stuck)
+  if (P.ads && (P.vehicle || P.kong || P.ko > 0 || P.morphT > 0 || P.climb)) toggleAim(false);
+  P.adsT += ((P.ads ? 1 : 0) - (P.adsT || 0)) * Math.min(1, dt * 10);
+  // forgot to switch AIM off? it lowers the gun by itself after 8 quiet seconds
+  if (P.ads) { P.adsIdle = (P.adsIdle || 0) + dt; if (P.firing || P.lookActive > 0) P.adsIdle = 0; if (P.adsIdle > 8) toggleAim(false); }
   P.inv = Math.max(0, P.inv - dt);
   P.punchCd -= dt; P.roarCd = Math.max(0, P.roarCd - dt); P.punchT -= dt; P.roarT -= dt;
   if (P.morphT > 0) {
@@ -344,9 +353,11 @@ export function updateHero(dt, inp) {
   }
   if (P.ko > 0) {
     P.ko -= dt;
+    P.climb = null;
+    if (!P.vehicle) updateFalling(dt);
     joseph.root.visible = !firstPerson();
     joseph.root.rotation.x = -Math.PI / 2 * Math.min(1, (2.4 - P.ko) * 4);
-    joseph.root.position.set(P.pos.x, 0.35, P.pos.z);
+    joseph.root.position.set(P.pos.x, P.y + 0.35, P.pos.z);
     placeGuns(dt, null); handGun.visible = false;
     if (P.ko <= 0) { P.hearts = GAME.hero.hearts; P.inv = 3; joseph.root.rotation.x = 0; sfx.save(); }
     return;

@@ -84,10 +84,11 @@ export function addSolid(cx, cz, hw, hd, h, extra = {}) {
   return s;
 }
 
-function addBuilding(cx, cz, w, d, h, style, ladderChance = 0) {
+function addBuilding(cx, cz, w, d, h, style, ladderChance = 0, blockZ = cz) {
   const b = { cx, cz, hw: w / 2, hd: d / 2, h, style, alive: true, crumble: -1, debris: FACADES[style].debris, hidden: false };
   if (Math.random() < ladderChance && h < 38) {
-    const side = Math.random() < 0.5 ? 1 : -1;
+    // the ladder goes on the wall that faces the street (away from the middle of its block)
+    const side = Math.abs(cz - blockZ) > 0.5 ? Math.sign(cz - blockZ) : (Math.random() < 0.5 ? 1 : -1);
     b.ladder = { x: cx + rnd(-w / 4, w / 4), z: cz + side * (d / 2 + 0.25), nz: side };
   }
   buildings.push(b);
@@ -105,7 +106,7 @@ function planDowntown() {
     if (x0 >= -DT.park && x0 + 16 <= DT.park && z0 >= -DT.park && z0 + 16 <= DT.park) continue;
     const fromCenter = Math.hypot(x0 + 8, z0 + 8);
     const tall = () => rnd(7, 14) + Math.max(0, 110 - fromCenter) * rnd(0.12, 0.38);
-    const add = (cx, cz, w, d) => { const h = tall(); addBuilding(cx, cz, w, d, h, facadeFor(fromCenter, h), 0.35); };
+    const add = (cx, cz, w, d) => { const h = tall(); addBuilding(cx, cz, w, d, h, facadeFor(fromCenter, h), 0.35, z0 + 8); };
     const split = Math.random();
     if (split < 0.3) add(x0 + 8, z0 + 8, 14, 14);
     else if (split < 0.7) {
@@ -121,7 +122,7 @@ function planResidential() {
     for (const [ox, oz] of [[11, 11], [31, 11], [11, 31], [31, 31]]) {
       if (Math.random() < 0.15) continue;
       const w = rnd(8, 11), d = rnd(8, 11);
-      addBuilding(x + ox, z + oz, w, d, rnd(5, 10), Math.random() < 0.7 ? 'brick' : 'concrete', 0.3);
+      addBuilding(x + ox, z + oz, w, d, rnd(5, 10), Math.random() < 0.7 ? 'brick' : 'concrete', 0.3, z + 21);
     }
   }
 }
