@@ -234,8 +234,8 @@ function fitModel(type) {
     // the spinning rotors come from the built helicopter, moved onto the model's mast and tail
     const built = helicopter(), b = boundsOf(m.root);
     const { rotor, tailRotor } = built.userData;
-    rotor.position.set((b.min.x + b.max.x) / 2, b.max.y + 0.15, (b.min.z + b.max.z) / 2 + 0.6);
-    tailRotor.position.set(0.45, b.min.y + (b.max.y - b.min.y) * 0.55, b.min.z + 0.6);
+    rotor.position.set((b.min.x + b.max.x) / 2, b.max.y + 0.1, (b.min.z + b.max.z) / 2 + (b.max.z - b.min.z) * 0.087); // the model's hub sits a little forward
+    tailRotor.position.set(0.45, b.min.y + (b.max.y - b.min.y) * 0.78, b.min.z + 0.5);
     g.add(rotor, tailRotor);
     g.userData.rotor = rotor; g.userData.tailRotor = tailRotor;
   }

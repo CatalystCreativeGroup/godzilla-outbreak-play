@@ -25,6 +25,12 @@ export const MODEL_SPECS = {
   car:      { file: 'car',  length: 4.8, fallback: 0xa31621, maps: ALL, yawFix: Math.PI / 2 },
   tank:     { file: 'tank', length: 9.5, fallback: 0x4b5233, maps: ALL, yawFix: Math.PI / 2 },
   jet:      { file: 'jet',  length: 17,  fallback: 0x8a9096, maps: ALL, yawFix: Math.PI / 2 },
+  // realistic vehicle bodies; without the file the shape-built vehicle is used (see vehicle-models.js)
+  heli:      { file: 'heli',      length: 15,  fallback: 0x3f4428, maps: ALL, yawFix: Math.PI / 2, optional: true },
+  blueangel: { file: 'blueangel', length: 17,  fallback: 0x041646, maps: ALL, yawFix: Math.PI / 2, optional: true },
+  sub:       { file: 'sub',       length: 31,  fallback: 0x0c0d0e, maps: ALL, yawFix: Math.PI / 2, optional: true },
+  carrier:   { file: 'carrier',   length: 114, fallback: 0x464c52, maps: ALL, yawFix: Math.PI / 2, optional: true },
+  gun_sniper:    { file: 'gun_sniper',    length: 1.45, fallback: 0x3f4428, maps: ALL, yawFix: Math.PI / 2, gun: true, optional: true },
   gun_blaster:   { file: 'gun_blaster',   length: 0.32, fallback: 0x222222, maps: ALL, yawFix: Math.PI / 2, gun: true },
   gun_rifle:     { file: 'gun_rifle',     length: 0.95, fallback: 0x222222, maps: ALL, yawFix: Math.PI / 2, gun: true },
   gun_shotgun:   { file: 'gun_shotgun',   length: 1.0,  fallback: 0x222222, maps: ALL, yawFix: Math.PI / 2, gun: true },
