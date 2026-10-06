@@ -3,6 +3,7 @@
 // wheels/keel at y = 0, like the loaded models.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { spawnModel, hasModel } from './models.js';
 
 const mats = {};
 function mat(key, opts) {
@@ -203,9 +204,48 @@ function submarine() {
 const BUILD = { blueangel: blueAngel, heli: helicopter, missile: missileTruck, carrier, sub: submarine };
 export const proceduralTypes = Object.keys(BUILD);
 
+/* Realistic model files for these vehicles (add them to MODEL_SPECS in models.js). When one is loaded it replaces the shape-built body;
+   moving parts (rotors) are still built here so they can spin. */
+const MODEL_FOR = { heli: 'heli', blueangel: 'blueangel', sub: 'sub', carrier: 'carrier' };
+
+const _box = new THREE.Box3(), _ray = new THREE.Raycaster();
+function boundsOf(obj) { obj.updateMatrixWorld(true); return _box.setFromObject(obj).clone(); }
+
+/* Height of the model's surface under (x, z), so the carrier's flight deck lines up with the walkable deck. */
+function surfaceY(obj, x, z) {
+  obj.updateMatrixWorld(true);
+  _ray.set(new THREE.Vector3(x, 500, z), new THREE.Vector3(0, -1, 0));
+  const hit = _ray.intersectObject(obj, true)[0];
+  return hit ? hit.point.y : null;
+}
+
+function fitModel(type) {
+  const m = spawnModel(MODEL_FOR[type]);
+  const g = new THREE.Group();
+  g.add(m.root);
+  if (type === 'carrier') {
+    const deck = surfaceY(m.root, -4, -30);
+    if (deck !== null) m.root.position.y += CARRIER_DECK - deck;
+    const radar = new THREE.Object3D(); g.add(radar); g.userData.radar = radar;
+  } else if (type === 'sub') {
+    m.root.position.y -= boundsOf(m.root).getCenter(new THREE.Vector3()).y; // hull centre on the waterline like the built one
+    const prop = new THREE.Object3D(); g.add(prop); g.userData.prop = prop;
+  } else if (type === 'heli') {
+    // the spinning rotors come from the built helicopter, moved onto the model's mast and tail
+    const built = helicopter(), b = boundsOf(m.root);
+    const { rotor, tailRotor } = built.userData;
+    rotor.position.set((b.min.x + b.max.x) / 2, b.max.y + 0.15, (b.min.z + b.max.z) / 2 + 0.6);
+    tailRotor.position.set(0.45, b.min.y + (b.max.y - b.min.y) * 0.55, b.min.z + 0.6);
+    g.add(rotor, tailRotor);
+    g.userData.rotor = rotor; g.userData.tailRotor = tailRotor;
+  }
+  return g;
+}
+
 /* Same shape as spawnModel() returns, so vehicles don't care where their model came from. */
 export function buildVehicleModel(type) {
-  const g = BUILD[type]();
+  const fromFile = MODEL_FOR[type] && hasModel(MODEL_FOR[type]);
+  const g = fromFile ? fitModel(type) : BUILD[type]();
   const root = new THREE.Group();
   root.add(g);
   return { root, anim: null, materials: [], bones: {}, procedural: true, parts: g.userData };

@@ -6,6 +6,7 @@ import { sfx } from './audio.js';
 import { sparks, flash, fireball, bolt, shake, smoke } from './fx.js';
 import { V3, rnd, world, loadout } from './world.js';
 import { smashNear } from './map.js';
+import { kidTarget } from './kid-godzilla.js';
 
 /* Damage multiplier for a weapon level (level 1 = x1, each level +30%). */
 export const levelMul = lvl => 1 + 0.3 * (Math.min(lvl, MAX_WEAPON_LEVEL) - 1);
@@ -27,6 +28,7 @@ export function liveTargets() {
   cache = list;
   for (const n of world.nests) if (n.alive) list.push(n);
   if (world.bossTarget && world.bossTarget.alive) list.push(world.bossTarget);
+  if (kidTarget.alive) list.push(kidTarget);
   return list;
 }
 

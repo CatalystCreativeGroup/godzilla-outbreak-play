@@ -14,6 +14,7 @@ export const MODEL_SPECS = {
   person:   { file: 'person',   height: 2.6, fallback: 0xff8a2a, maps: ['color', 'normal', 'orm'] },
   minion:   { file: 'minion',   height: 1.9, fallback: 0x7a4fb0, maps: ['color', 'normal', 'orm'] },
   godzilla: { file: 'godzilla', height: 8.5, fallback: 0x55704a, maps: ['color'] },
+  kid:      { file: 'kid_godzilla', height: 10.5, fallback: 0x2f4a3e, maps: ['color', 'normal', 'orm'] },
   kong:     { file: 'kong',     height: 12,  fallback: 0x2b2522, maps: ['color', 'normal', 'orm'] },
   ice:      { file: 'boss_ice',     height: 8.5, fallback: 0xbfe4ff, maps: ['color'] },
   thunder:  { file: 'boss_thunder', height: 8.5, fallback: 0x222222, maps: ['color'] },
@@ -46,13 +47,13 @@ async function loadMaps(spec) {
       if (slot === 'color') t.encoding = THREE.sRGBEncoding;
       maps[slot] = t;
     } catch (e) {
-      console.warn(`texture ${spec.file}_${slot} failed to load`, e);
+      if (!spec.optional) console.warn(`texture ${spec.file}_${slot} failed to load`, e);
     }
   }));
   return maps;
 }
 
-function applyMaps(material, maps) {
+function applyMaps(material, maps, spec) {
   // Start as a plain, non-metallic surface so a missing map never turns a character into white chrome.
   material.metalness = 0;
   material.roughness = 0.8;
@@ -61,7 +62,7 @@ function applyMaps(material, maps) {
   if (maps.orm) {
     material.roughnessMap = maps.orm; // glTF packs roughness in G, metalness in B
     material.metalnessMap = maps.orm;
-    material.metalness = 1;
+    material.metalness = spec.metal ?? 1; // some baked models read too metallic (chrome in the sky light), so their spec can turn it down
     material.roughness = 1;
   }
   material.needsUpdate = true;
@@ -109,7 +110,7 @@ function prepare(name, gltf, maps) {
     o.castShadow = true;
     o.receiveShadow = true;
     if (o.isSkinnedMesh) o.frustumCulled = false; // skinned bounds don't follow the animation (characters are culled by distance instead)
-    if (o.material) { applyMaps(o.material, maps); o.material.envMapIntensity = ENV.characters; }
+    if (o.material) { applyMaps(o.material, maps, spec); o.material.envMapIntensity = ENV.characters; }
   });
   const clips = {};
   for (const c of gltf.animations) clips[c.name] = stripRootMotion(c);
@@ -127,7 +128,7 @@ export async function loadModels(onProgress) {
       const [gltf, maps] = await Promise.all([loader.loadAsync(`assets/models/${spec.file}.glb`), loadMaps(spec)]);
       loaded[name] = prepare(name, gltf, maps);
     } catch (err) {
-      console.warn(`model ${name} failed to load, using a stand-in`, err);
+      if (!spec.optional) console.warn(`model ${name} failed to load, using a stand-in`, err);
     }
     onProgress?.(++done / names.length);
   }));

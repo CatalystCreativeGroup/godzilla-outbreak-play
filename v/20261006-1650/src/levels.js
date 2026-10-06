@@ -8,13 +8,13 @@
      airstrike — fly a jet from the airport and bomb monster bases
      tank     — take a tank from the army base and stop the brute army
      collect  — grab the weapon parts guarded by monsters
-   boss model: godzilla | ice | thunder | mecha | shadow | swamp
+   boss model: godzilla | kid | ice | thunder | mecha | shadow | swamp
    ===================================================================== */
 export const LEVELS = [
   { name: 'BABY GODZILLA ATTACK', district: 'downtown', theme: 'day', mission: { type: 'rescue', count: 3 }, monsters: ['lizard'], roamers: 8,
     boss: { model: 'godzilla', name: 'BABY GODZILLA', health: 260, size: 1, element: 'normal' }, unlocks: ['rifle'], reward: 'GROUND POUND' },
   { name: 'NEST BUSTERS', district: 'downtown', theme: 'day', mission: { type: 'nests', count: 4 }, monsters: ['lizard', 'jumper'], roamers: 9,
-    boss: { model: 'godzilla', name: 'KID GODZILLA', health: 380, size: 1.35, tint: 0x9fb39a, element: 'normal' }, unlocks: ['shotgun'] },
+    boss: { model: 'kid', name: 'KID GODZILLA', health: 380, size: 1.1, element: 'normal' }, unlocks: ['shotgun'] },
   { name: 'SWAMP THING', district: 'residential', theme: 'golden', mission: { type: 'rescue', count: 3 }, monsters: ['lizard', 'spitter'], roamers: 10,
     boss: { model: 'swamp', name: 'SWAMP GODZILLA', health: 460, size: 1.2, element: 'swamp', special: 'summon' } },
   { name: 'ROOFTOP RESCUE', district: 'residential', theme: 'day', mission: { type: 'rooftop', count: 4 }, monsters: ['lizard', 'jumper', 'spitter'], roamers: 10,

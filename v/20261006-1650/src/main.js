@@ -24,6 +24,7 @@ import { setupVehicles, updateVehicles, vehicleNear, enterVehicle, exitVehicle, 
 import { CARRIER_DECK } from './vehicle-models.js';
 import { updateMissile, missileCamera, missile, resetMissile } from './missile.js';
 import { updateUnderwater, updateTorpedoes, clearTorpedoes } from './ocean.js';
+import { updateKidGodzilla, clearKidGodzilla } from './kid-godzilla.js';
 import { buildArmyBase, startNap, updateNap, napCamera, bedNear, resetDayNight } from './army-base.js';
 import { joseph } from './hero.js';
 import { SHORE, platformAt } from './map.js';
@@ -88,7 +89,7 @@ function prepareLevel(index) {
   applyTheme(level.theme);
   setMapTheme(level.theme);
   setMoteColor(MOTE_COLORS[level.theme] || 0xfff4e0, level.theme === 'volcano' ? 0.28 : 0.18);
-  clearEnemies(); clearLoot(); clearShots(); clearMission(); clearBombs(); hideBoss(); clearTorpedoes(); resetMissile(); resetDayNight();
+  clearEnemies(); clearLoot(); clearShots(); clearMission(); clearBombs(); hideBoss(); clearTorpedoes(); clearKidGodzilla(); resetMissile(); resetDayNight();
   P.nap = null; $('nap').hidden = true; $('pads').hidden = false;
   resetBuildings();
   scatterCrates();
@@ -315,6 +316,7 @@ function update(dt) {
     updateAllies(dt);
     if (world.state !== 'win' && world.state !== 'ending') { updateEnemies(dt); updateShots(dt); updateNests(dt); }
     updateBoss(dt);
+    if (live) updateKidGodzilla(dt);
     updateLoot(dt);
     if (world.mode === 'free') updateFreePlay(dt); else { updateMissions(dt); updateStory(dt); }
     if (world.state === 'bossIntro') updateBossIntro(dt);
