@@ -28,8 +28,8 @@ export const VEHICLE_TYPES = {
   jet:       { label: '✈️ FLY',        kind: 'jet',    controls: 'stick', hp: 60,  maxSpeed: 55, accel: 14,  turn: 1.1, radius: 4.5, ram: 0, bombs: 0.55, fire: ['💣', 'BOMB'] },
   blueangel: { label: '✈️ BLUE ANGEL', kind: 'jet',    controls: 'stick', hp: 70,  maxSpeed: 62, accel: 16,  turn: 1.3, radius: 4.5, ram: 0, bombs: 0.45, fire: ['💣', 'BOMB'] },
   heli:      { label: '🚁 HELICOPTER', kind: 'heli',   controls: 'stick', hp: 55,  maxSpeed: 24, accel: 6,   turn: 1.5, radius: 3.6, ram: 0, rockets: 0.5, fire: ['🚀', 'ROCKETS'] },
-  carrier:   { label: '🚢 CAPTAIN',    kind: 'ship',   controls: 'wheel', hp: 9999, maxSpeed: 9, accel: 1.2, turn: 0.22, radius: 14, ram: 0 },
-  sub:       { label: '🛳️ SUBMARINE',  kind: 'sub',    controls: 'wheel', hp: 120, maxSpeed: 13, accel: 3,   turn: 0.6, radius: 4.0, ram: 0, torpedo: 1.2, fire: ['🌊', 'TORPEDO'] },
+  carrier:   { label: '🚢 CAPTAIN',    kind: 'ship',   controls: 'wheel', hp: 9999, maxSpeed: 12, accel: 2.2, turn: 0.3, radius: 14, ram: 0 },
+  sub:       { label: '🛳️ SUBMARINE',  kind: 'sub',    controls: 'wheel', hp: 120, maxSpeed: 14, accel: 4,   turn: 0.7, radius: 4.0, ram: 0, torpedo: 1.2, fire: ['🌊', 'TORPEDO'] },
 };
 
 let parked = null; // instanced decorative cars
@@ -406,7 +406,8 @@ function heli(v, inp, dt) {
   v.yaw -= inp.x * t.turn * dt * (landed ? 0.3 : 1);
   v.pos.x += Math.sin(v.yaw) * v.speed * dt;
   v.pos.z += Math.cos(v.yaw) * v.speed * dt;
-  if (v.alt < 40) collide(v.pos, t.radius * 0.6, v.alt); // tall buildings are in the way when flying low
+  // tall buildings are in the way when flying low; once off the ground nothing else holds it back (deck edge, shore)
+  if (v.alt < 40) collide(v.pos, t.radius * 0.6, v.alt, !landed);
   keepInAir(v, dt);
   v.pitchTilt += ((-v.speed / t.maxSpeed) * -0.22 - v.pitchTilt) * Math.min(1, dt * 3);
   v.roll += (-inp.x * 0.25 * (landed ? 0 : 1) - v.roll) * Math.min(1, dt * 3);

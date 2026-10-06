@@ -287,7 +287,8 @@ export function buildWorld() {
 
 /* ---------- physics helpers ---------- */
 /* Push a circle out of solid things it can't climb onto. `y` = how high the mover is (roofs below it don't block). */
-export function collide(pos, r, y = 0) {
+/* air = true for helicopters and planes in flight: only buildings stop them (not the deck edge, the shore or the city edge). */
+export function collide(pos, r, y = 0, air = false) {
   for (const b of near(pos.x, pos.z, r + 16)) {
     if (!b.alive || b.h <= y + 0.5) continue;
     const nx = clamp(pos.x, b.cx - b.hw, b.cx + b.hw), nz = clamp(pos.z, b.cz - b.hd, b.cz + b.hd);
@@ -304,6 +305,7 @@ export function collide(pos, r, y = 0) {
     }
   }
   // standing on the ship's deck: stay on the deck
+  if (air) return;
   const plat = platformAt(pos.x, pos.z, y);
   if (plat) { plat.keepInside(pos, r); return; }
   pos.x = clamp(pos.x, -EDGE, EDGE); pos.z = clamp(pos.z, -EDGE, Math.min(EDGE, SHORE - r)); // no walking into the sea
