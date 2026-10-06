@@ -19,6 +19,7 @@ export const WEAPONS = {
   shotgun:   { name: 'SHOTGUN',    icon: '💥', damage: 0.9, rate: 0.75, speed: 60, pellets: 7, spread: 0.28, color: 0xffe0a0, range: 20 },
   bazooka:   { name: 'BAZOOKA',    icon: '🚀', damage: 7,   rate: 1.1,  speed: 32, pellets: 1, spread: 0,    color: 0xff8a3d, range: 42, splash: 6 },
   lightning: { name: 'LIGHTNING',  icon: '🌩️', damage: 1.6, rate: 0.45, speed: 0,  pellets: 1, spread: 0,    color: 0xb8a8ff, range: 30, chain: 3, element: 'shock' },
+  sniper:    { name: '.50 CAL SNIPER', icon: '🎯', damage: 16, rate: 1.4, speed: 260, pellets: 1, spread: 0.002, color: 0xfff2c0, range: 150 },
   freeze:    { name: 'FREEZE RAY', icon: '❄️', damage: 0.7, rate: 0.14, speed: 60, pellets: 1, spread: 0.03, color: 0xaef4ff, range: 30, slow: 2, element: 'ice' },
 };
 export const MAX_WEAPON_LEVEL = 5;

@@ -204,7 +204,8 @@ export function updateBoss(dt) {
     g.rotation.z = Math.min(Math.PI / 2, B.t * 1.6);
     if (B.t > 0.9 && B.t - dt <= 0.9) { shake(1.2); sfx.boom(); smoke(new V3(B.pos.x, 1, B.pos.z), 14, 5, 0xb7ab98, 6); }
     if (B.t > 2.8) g.scale.setScalar(Math.max(0.01, 1 - (B.t - 2.8) * 2));
-    if (B.t > 3.4 && (world.state === 'boss' || world.state === 'bossIntro')) { world.bossTarget = null; world.onBossDefeated?.(); }
+    // report the win exactly once, then put the boss away (free play stays in battle mode, so this must not repeat)
+    if (B.t > 3.4 && (world.state === 'boss' || world.state === 'bossIntro')) { hideBoss(); world.onBossDefeated?.(); }
   } else if (B.stun > 0) {
     B.stun -= dt;
     g.rotation.z = Math.sin(B.t * 6) * 0.08;

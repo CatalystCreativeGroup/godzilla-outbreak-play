@@ -234,7 +234,7 @@ function shoot() {
   P.fireCd = w.rate * rateMul();
   P.aimT = 0.35;
   P.recoil = Math.min(1, P.recoil + (loadout.current === 'bazooka' || loadout.current === 'shotgun' ? 1 : 0.45));
-  P.kick = Math.min(0.12, (P.kick || 0) + (loadout.current === 'bazooka' ? 0.06 : loadout.current === 'shotgun' ? 0.04 : 0.008) * (P.ads ? 0.4 : 1));
+  P.kick = Math.min(0.12, (P.kick || 0) + (loadout.current === 'sniper' ? 0.07 : loadout.current === 'bazooka' ? 0.06 : loadout.current === 'shotgun' ? 0.04 : 0.008) * (P.ads ? 0.4 : 1));
 }
 
 /* ---------- per-frame ---------- */
@@ -314,7 +314,7 @@ function placeGuns(dt, inp) {
   const a = P.adsT, sway = 1 - a * 0.8;
   const hipX = 0.24 + swayX * sway, hipY = (big ? -0.3 : -0.24) - swayY * sway, hipZ = big ? -0.5 : -0.55;
   // guns with a scope (rifle, bazooka) look through the scope; the others line up over the sights
-  const scoped = loadout.current === 'rifle' || big;
+  const scoped = loadout.current === 'rifle' || loadout.current === 'sniper' || big;
   const adsY = -(viewGun.userData.sightY || 0.06) + (scoped ? 0.03 : -0.022), adsZ = big ? -0.42 : -0.36;
   viewGun.position.set(hipX * (1 - a), hipY + (adsY - hipY) * a + P.recoil * 0.015 * sway, hipZ + (adsZ - hipZ) * a + P.recoil * 0.07 * sway);
   viewGun.rotation.set(P.recoil * 0.12 * sway, Math.PI + 0.04 * (1 - a), 0);

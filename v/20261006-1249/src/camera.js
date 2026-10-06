@@ -7,7 +7,7 @@ import { EYE, firstPerson } from './hero.js';
 import { loadout } from './world.js';
 
 /* How much each gun zooms in when aiming down the sights (scopes zoom the most). */
-const ZOOM = { blaster: 1.5, rifle: 3, shotgun: 1.35, bazooka: 2.5, lightning: 1.5, freeze: 1.5 };
+const ZOOM = { blaster: 1.5, rifle: 3, shotgun: 1.35, bazooka: 2.5, lightning: 1.5, freeze: 1.5, sniper: 7 };
 
 const camPos = new V3(0, 40, 60), camLook = new V3();
 let lastFov = 0, lastNear = 0;
@@ -44,7 +44,7 @@ function firstPersonCamera(dt) {
   camPos.copy(camera.position);
 }
 
-const CHASE = { car: [9, 3.8, 1.6], tank: [13, 6, 2.5], jet: [24, 6.5, 2] }; // back, up, look height
+const CHASE = { car: [9, 3.8, 1.6], tank: [13, 6, 2.5], missile: [11, 4.6, 2], jet: [24, 6.5, 2], blueangel: [24, 6.5, 2], heli: [17, 6, 1], carrier: [95, 42, 14], sub: [30, 8, 1] }; // back, up, look height
 
 function vehicleCamera(dt) {
   const v = P.vehicle;

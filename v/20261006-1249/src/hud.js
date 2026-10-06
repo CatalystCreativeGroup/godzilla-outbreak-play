@@ -58,9 +58,10 @@ export function updateHud() {
 
 /* First person: an arrow at the top of the screen points to the next camp (or the boss). */
 /* While aiming down the sights: a real scope (rifle, bazooka) or a red holographic sight (other guns). */
+const SCOPED = ['rifle', 'bazooka', 'sniper']; // guns that look through a zoom scope
 export function sightMode() {
   if (!firstPerson() || P.kong || P.vehicle || (P.adsT || 0) < 0.85) return '';
-  return loadout.current === 'rifle' || loadout.current === 'bazooka' ? 'scope' : 'holo';
+  return SCOPED.includes(loadout.current) ? 'scope' : 'holo';
 }
 
 export function updateCompass(target) {
@@ -151,9 +152,14 @@ export function setVehicleControls(v) {
   $('btn-aim').hidden = inside || P.kong;
   $('btn-morph').hidden = inside || P.kong;
   $('weapon-chip').hidden = inside || P.kong;
-  $('btn-fire').hidden = inside && v.type === 'car';
-  $('btn-fire-ic').textContent = !inside ? (P.kong ? '👊' : '🎯') : v.type === 'jet' ? '💣' : '💥';
-  $('btn-fire-label').textContent = !inside ? (P.kong ? 'PUNCH' : 'FIRE') : v.type === 'jet' ? 'BOMB' : 'CANNON';
+  const t = v?.t;
+  $('btn-fire').hidden = inside && !t.fire;
+  $('btn-fire-ic').textContent = !inside ? (P.kong ? '👊' : '🎯') : (t.fire || ['💥'])[0];
+  $('btn-fire-label').textContent = !inside ? (P.kong ? 'PUNCH' : 'FIRE') : (t.fire || ['', 'FIRE'])[1];
+  // helicopter and submarine: hold UP / DOWN (DIVE)
+  $('lift').hidden = !(t && (t.kind === 'heli' || t.kind === 'sub'));
+  $('btn-down-label').textContent = t?.kind === 'sub' ? 'DIVE' : 'DOWN';
+  $('btn-up-label').textContent = t?.kind === 'sub' ? 'SURFACE' : 'UP';
   resetHudCache();
 }
 
@@ -198,6 +204,12 @@ export function initInput(actions) {
     el.addEventListener('click', e => { if (e.detail === 0) fn(); }); // keyboard activation
   };
   pad('btn-a', () => (P.kong ? actions.roar() : actions.jump()));
+  // UP / DOWN buttons for the helicopter and submarine: held down, not tapped
+  for (const [id, key] of [['btn-up', 'liftUp'], ['btn-down', 'liftDown']]) {
+    const el = $(id);
+    el.addEventListener('pointerdown', e => { e.preventDefault(); P[key] = true; el.classList.add('down'); try { el.setPointerCapture(e.pointerId); } catch (err) { /* gone */ } });
+    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(ev, () => { P[key] = false; el.classList.remove('down'); });
+  }
   pad('btn-morph', actions.morph);
   pad('btn-swap', actions.swap);
   pad('btn-view', actions.view);
@@ -221,8 +233,8 @@ export function initInput(actions) {
   look.addEventListener('pointermove', e => {
     if (e.pointerId !== drag.id) return;
     // slower look while aiming down the sights, and a little sticky when the crosshair is on a monster
-    const scoped = loadout.current === 'rifle' || loadout.current === 'bazooka';
-    const k = 0.0055 * GAME.controls.lookSpeed * (P.ads ? (scoped ? 0.3 : 0.45) : 1) * (world.aimTarget ? 0.7 : 1);
+    const scoped = SCOPED.includes(loadout.current);
+    const k = 0.0055 * GAME.controls.lookSpeed * (P.ads ? (loadout.current === 'sniper' ? 0.14 : scoped ? 0.3 : 0.45) : 1) * (world.aimTarget ? 0.7 : 1);
     P.lookActive = 0.15;
     P.yaw -= (e.clientX - drag.x) * k;
     P.lookT = 1.5; // while driving, the camera stays where you looked for a moment
@@ -238,6 +250,8 @@ export function initInput(actions) {
     keys.add(e.code);
     if (!['mission', 'boss', 'bossIntro'].includes(world.state)) return;
     if (e.code === 'Space') { e.preventDefault(); P.kong ? actions.roar() : actions.jump(); }
+    if (e.code === 'Space') P.liftUp = true;
+    if (e.code === 'KeyC' || e.code === 'ShiftLeft') P.liftDown = true;
     if ((e.code === 'KeyF' || e.code === 'Enter') && !e.repeat) { P.firing = true; P.fireQueued = true; }
     if (e.code === 'KeyV') actions.view();
     if (e.code === 'KeyZ') actions.aim();
@@ -245,9 +259,11 @@ export function initInput(actions) {
     if (e.code === 'KeyR') actions.roar();
     if (e.code === 'KeyQ' || e.code === 'Tab') { e.preventDefault(); actions.swap(); }
     const n = Number(e.key);
-    if (n >= 1 && n <= 6) actions.select(n - 1);
+    if (n >= 1 && n <= 9) actions.select(n - 1);
   });
-  window.addEventListener('keyup', e => { keys.delete(e.code); if (e.code === 'KeyF' || e.code === 'Enter') P.firing = false; });
+  window.addEventListener('keyup', e => {
+    if (e.code === 'Space') P.liftUp = false;
+    if (e.code === 'KeyC' || e.code === 'ShiftLeft') P.liftDown = false; keys.delete(e.code); if (e.code === 'KeyF' || e.code === 'Enter') P.firing = false; });
   window.addEventListener('blur', () => { keys.clear(); P.firing = false; });
   document.addEventListener('contextmenu', e => e.preventDefault());
 }

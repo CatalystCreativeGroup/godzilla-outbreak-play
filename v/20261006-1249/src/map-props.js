@@ -44,7 +44,7 @@ function trees(group) {
   // countryside around the city
   for (let i = 0; i < 260; i++) {
     const x = rnd(-560, 560), z = rnd(-560, 560);
-    if (Math.abs(x) < 400 && Math.abs(z) < 400) continue;
+    if ((Math.abs(x) < 400 && Math.abs(z) < 400) || z > 258) continue; // not in the city, not in the sea
     spots.push([x, 0, z, rnd(0, 3), rnd(1.2, 2.2)]);
   }
   // along the highways
@@ -98,8 +98,10 @@ function parkedCars(group) {
 /* ---------- harbor ---------- */
 function harbor(group) {
   waterNormal.repeat.set(60, 30);
-  water = new THREE.Mesh(new THREE.PlaneGeometry(1400, 600), new THREE.MeshStandardMaterial({ color: 0x1d3a44, roughness: 0.08, metalness: 0.2, normalMap: waterNormal, normalScale: new THREE.Vector2(0.6, 0.6) }));
-  water.rotation.x = -Math.PI / 2; water.position.set(0, 0.06, 262 + 300);
+  // one big sheet of ocean (seen from below too, by the submarine)
+  waterNormal.repeat.set(110, 75);
+  water = new THREE.Mesh(new THREE.PlaneGeometry(2300, 1490), new THREE.MeshStandardMaterial({ color: 0x1d3a44, roughness: 0.08, metalness: 0.2, normalMap: waterNormal, normalScale: new THREE.Vector2(0.6, 0.6), side: THREE.DoubleSide }));
+  water.rotation.x = -Math.PI / 2; water.position.set(0, 0.06, 262 + 745);
   group.add(water);
   const quay = new THREE.Mesh(new THREE.BoxGeometry(520, 1.4, 3), new THREE.MeshStandardMaterial({ map: texRepeat('sidewalk', 90, 1), roughness: 0.9 }));
   quay.position.set(0, 0.2, 261); quay.receiveShadow = true; group.add(quay);

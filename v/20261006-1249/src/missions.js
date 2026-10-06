@@ -247,7 +247,8 @@ export function objective() {
   if (s) return s;
   if (!targetsRevealed() || storyStage() !== 'mission') return null;
   const type = mission.type;
-  if ((type === 'airstrike' || type === 'tank') && P.vehicle?.type !== (type === 'airstrike' ? 'jet' : 'tank')) {
+  const inRightVehicle = type === 'airstrike' ? P.vehicle?.t.kind === 'jet' || P.vehicle?.t.kind === 'heli' : P.vehicle?.type === 'tank';
+  if ((type === 'airstrike' || type === 'tank') && !inRightVehicle) {
     const want = type === 'airstrike' ? 'jet' : 'tank';
     if (type === 'airstrike' || mission.items.filter(i => !i.done).length === mission.total) {
       let best = null, bd = Infinity;

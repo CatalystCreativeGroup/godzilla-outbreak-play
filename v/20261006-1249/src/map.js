@@ -14,6 +14,19 @@ export const WORLD = 400, EDGE = 395;
 export const RING = 158, RING_W = 14;
 export const DT = { half: 142, gap: 24, road: 8, park: 20 }; // downtown street grid
 
+/* The ocean south of the harbor: ships and submarines sail here, jets and helicopters fly out over it. */
+export const SHORE = 262, WATER_Y = 0.06, SEABED = -30;
+export const OCEAN = { x0: -1150, x1: 1150, z0: SHORE, z1: 1750 };
+export const AIR = { x0: -1150, x1: 1150, z0: -650, z1: 1750 };
+export const isWater = (x, z) => z > SHORE && z < OCEAN.z1 && x > OCEAN.x0 && x < OCEAN.x1;
+
+/* Moving floors you can stand on (the aircraft carrier's deck). Each has top, contains(x, z) and keepInside(pos, r). */
+export const platforms = [];
+export function platformAt(x, z, y) {
+  for (const p of platforms) if (y >= p.top - 0.8 && p.contains(x, z)) return p;
+  return null;
+}
+
 /* Districts: name, area, and the open spot where bosses land. */
 export const DISTRICTS = {
   downtown:    { name: 'DOWNTOWN',     x0: -142, x1: 142, z0: -142, z1: 142, arena: [0, 0] },
@@ -160,7 +173,11 @@ function texturedPlane(name, w, d, x, z, y, tile, extra = {}) {
 }
 
 function buildGround() {
-  texturedPlane('grass', 1200, 1200, 0, 0, -0.03, 10);
+  // land stops at the shore; past it is open water over a sandy seabed with a sea wall along the coast
+  texturedPlane('grass', 1200, 600 + SHORE, 0, (SHORE - 600) / 2, -0.03, 10);
+  texturedPlane('basalt', OCEAN.x1 - OCEAN.x0, OCEAN.z1 - OCEAN.z0, 0, (OCEAN.z0 + OCEAN.z1) / 2, SEABED, 18, { color: 0x8c8466 });
+  const wall = new THREE.Mesh(new THREE.BoxGeometry(OCEAN.x1 - OCEAN.x0, -SEABED + 1, 2), new THREE.MeshStandardMaterial({ map: texRepeat('sidewalk', 300, 8), color: 0x8a877f, roughness: 0.95 }));
+  wall.position.set(0, SEABED / 2, SHORE + 1); mapGroup.add(wall);
   const v = DISTRICTS.volcano;
   texturedPlane('basalt', v.x1 - v.x0 + 40, v.z1 - v.z0 + 40, (v.x0 + v.x1) / 2, (v.z0 + v.z1) / 2 - 10, -0.02, 14);
   texturedPlane('asphalt', DT.half * 2 + 8, DT.half * 2 + 8, 0, 0, 0.0, 8);                 // downtown paving
@@ -286,12 +303,16 @@ export function collide(pos, r, y = 0) {
       else pos.z = b.cz + Math.sign(pos.z - b.cz || 1) * (b.hd + r);
     }
   }
-  pos.x = clamp(pos.x, -EDGE, EDGE); pos.z = clamp(pos.z, -EDGE, EDGE);
+  // standing on the ship's deck: stay on the deck
+  const plat = platformAt(pos.x, pos.z, y);
+  if (plat) { plat.keepInside(pos, r); return; }
+  pos.x = clamp(pos.x, -EDGE, EDGE); pos.z = clamp(pos.z, -EDGE, Math.min(EDGE, SHORE - r)); // no walking into the sea
 }
 
 /* Height of whatever you'd stand on here (a roof just below you, or the street). */
 export function groundAt(x, z, y = 0) {
-  let g = 0;
+  let g = isWater(x, z) ? WATER_Y : 0;
+  for (const p of platforms) if (p.top <= y + 0.7 && p.contains(x, z)) g = Math.max(g, p.top);
   for (const b of near(x, z, 2)) {
     if (!b.alive || b.h > y + 0.7) continue;
     if (Math.abs(x - b.cx) < b.hw + 0.2 && Math.abs(z - b.cz) < b.hd + 0.2) g = Math.max(g, b.h);

@@ -20,7 +20,13 @@ import { setupBoss, updateBoss, hideBoss, poseBossForTitle } from './boss.js';
 import { setupMission, updateMissions, updateBossIntro, objective, clearMission, missionTargets } from './missions.js';
 import { updateNests } from './nests.js';
 import { scatterCrates } from './crates.js';
-import { setupVehicles, updateVehicles, vehicleNear, enterVehicle, exitVehicle, vehicleVictim, clearBombs } from './vehicles.js';
+import { setupVehicles, updateVehicles, vehicleNear, enterVehicle, exitVehicle, vehicleVictim, clearBombs, VEHICLE_TYPES, startLanding, heightAbove, carrierShip, carrierBridgeDoor } from './vehicles.js';
+import { CARRIER_DECK } from './vehicle-models.js';
+import { updateMissile, missileCamera, missile, resetMissile } from './missile.js';
+import { updateUnderwater, updateTorpedoes, clearTorpedoes } from './ocean.js';
+import { buildArmyBase, startNap, updateNap, napCamera, bedNear, resetDayNight } from './army-base.js';
+import { joseph } from './hero.js';
+import { SHORE, platformAt } from './map.js';
 import { initMinimap, updateMinimap, setBig } from './minimap.js';
 import { updateStory, talk, npcNear, endingLine, dialog } from './story.js';
 import { initDriveControls, showDriveControls, driveInput } from './drive-controls.js';
@@ -41,9 +47,13 @@ Object.assign(world, {
   onBossDefeated: () => (world.mode === 'free' ? freeBossDefeated() : winLevel()),
   fastTravel,
   onAimChange: on => $('btn-aim').classList.toggle('on', on),
-  onVehicleChange: () => { setVehicleControls(P.vehicle); showDriveControls(P.vehicle?.type); },
+  onVehicleChange: () => { setVehicleControls(P.vehicle); showDriveControls(wheelControls() ? 'wheel' : null); },
+  // the missile camera needs the stick to steer; afterwards the truck's wheel and pedals come back
+  onMissileCam: on => { showDriveControls(on ? null : (wheelControls() ? 'wheel' : null)); $('pads').hidden = on; },
   spawnSoldiers,
 });
+/* Does the vehicle Joseph is in use the steering wheel and pedals? */
+const wheelControls = () => !!P.vehicle && VEHICLE_TYPES[P.vehicle.type].controls === 'wheel';
 const victims = () => [heroVictim, vehicleVictim, ...world.allies].filter(v => v.alive);
 setHostileTargets(victims);
 setVictims(victims);
@@ -64,7 +74,7 @@ function updateArrow() {
   updateCompass(far ? target : null);
   arrow.visible = !!far && P.morphT <= 0 && !firstPerson();
   if (!arrow.visible) return;
-  const big = P.kong ? 2.5 : P.vehicle ? (P.vehicle.type === 'jet' ? 3 : 1.8) : 1;
+  const big = P.kong ? 2.5 : P.vehicle ? (['jet', 'heli', 'ship'].includes(P.vehicle.t.kind) ? 3 : 1.8) : 1;
   arrow.position.set(P.pos.x, (P.kong ? 14 : P.vehicle ? 6 : 3.4) + P.y + Math.sin(world.time * 5) * 0.2, P.pos.z);
   arrow.rotation.y = Math.atan2(target.x - P.pos.x, target.z - P.pos.z);
   arrow.scale.setScalar(big);
@@ -78,7 +88,8 @@ function prepareLevel(index) {
   applyTheme(level.theme);
   setMapTheme(level.theme);
   setMoteColor(MOTE_COLORS[level.theme] || 0xfff4e0, level.theme === 'volcano' ? 0.28 : 0.18);
-  clearEnemies(); clearLoot(); clearShots(); clearMission(); clearBombs(); hideBoss();
+  clearEnemies(); clearLoot(); clearShots(); clearMission(); clearBombs(); hideBoss(); clearTorpedoes(); resetMissile(); resetDayNight();
+  P.nap = null; $('nap').hidden = true; $('pads').hidden = false;
   resetBuildings();
   scatterCrates();
   setupVehicles();
@@ -193,15 +204,40 @@ function swapWeapon(dir = 1) {
   world.onWeaponChange();
   sfx.pickup();
 }
+function boardShip() {
+  const ship = carrierShip;
+  P.pos.copy(carrierBridgeDoor()).add(new V3(Math.sin(ship.yaw) * -8, 0, Math.cos(ship.yaw) * -8));
+  P.y = CARRIER_DECK; P.vy = 0;
+  banner('ON THE CARRIER!<small>Find the bridge door to drive it</small>', 2400);
+}
+function goAshore() {
+  P.pos.set(Math.max(-250, Math.min(250, P.pos.x)), 0, SHORE - 4); P.y = 0; P.vy = 0;
+  banner('Back on the dock!', 1600);
+}
 /* The action button does whatever makes sense right here. */
 function contextAction() {
-  if (world.paused || P.climb) return null;
-  if (P.vehicle) return { label: '🚪 EXIT', run: exitVehicle };
+  if (world.paused || P.climb || P.nap || missile.active) return null;
+  if (P.vehicle) {
+    const v = P.vehicle;
+    // a flying jet lands first (or, once it's coming down, Joseph can still jump out with the parachute)
+    if (v.t.kind === 'jet' && heightAbove(v) > 1 && !v.landing) return { label: '🛬 LAND', run: startLanding };
+    if (v.t.kind === 'jet' && v.landing) return { label: '🪂 JUMP OUT', run: exitVehicle };
+    return { label: '🚪 EXIT', run: exitVehicle };
+  }
   if (npcNear()) return { label: '💬 TALK', run: talk };
   const v = vehicleNear();
   if (v) return { label: v.t.label, run: () => enterVehicle(v) };
   const ladder = !P.kong && !P.climb ? ladderNear(P.pos, P.y) : null;
   if (ladder) return { label: '🪜 CLIMB', run: () => startClimb(ladder) };
+  if (bedNear()) return { label: '😴 NAP', run: startNap };
+  // the aircraft carrier: board it from the dock, drive it from the bridge, go back ashore from the deck
+  const ship = carrierShip;
+  if (ship && !P.kong) {
+    const onDeck = !!platformAt(P.pos.x, P.pos.z, P.y);
+    if (onDeck && carrierBridgeDoor().distanceTo(P.pos.clone().setY(0)) < 4) return { label: '🚢 CAPTAIN', run: () => enterVehicle(ship) };
+    if (onDeck) return { label: '⬇️ TO SHORE', run: goAshore };
+    if (P.y < 1 && P.pos.z > SHORE - 25 && Math.abs(P.pos.x - ship.pos.x) < 70 && ship.pos.z < SHORE + 60) return { label: '⛴️ BOARD SHIP', run: boardShip };
+  }
   return null;
 }
 initInput({
@@ -270,9 +306,12 @@ function update(dt) {
   } else if (world.state !== 'loading') {
     const live = world.state === 'mission' || world.state === 'boss';
     const inp = live ? moveInput(dt) : { x: 0, z: 0, l: 0 };
-    const drivingCar = P.vehicle && P.vehicle.type !== 'jet';
-    updateVehicles(dt, inp, drivingCar && live ? driveInput(dt) : undefined);
-    updateHero(dt, inp);
+    const napping = updateNap(dt);
+    updateVehicles(dt, missile.active ? { x: 0, z: 0, l: 0 } : inp, wheelControls() && live ? driveInput(dt) : undefined);
+    updateMissile(dt, inp);
+    updateTorpedoes(dt);
+    updateHero(dt, napping || missile.active ? { x: 0, z: 0, l: 0 } : inp);
+    if (napping) joseph.root.visible = false;
     updateAllies(dt);
     if (world.state !== 'win' && world.state !== 'ending') { updateEnemies(dt); updateShots(dt); updateNests(dt); }
     updateBoss(dt);
@@ -289,6 +328,8 @@ function update(dt) {
   updateFx(dt, focus);
   resize(); // cheap: only does work when the screen size really changed
   updateCamera(dt);
+  missileCamera(camera) || napCamera(camera);
+  updateUnderwater(camera);
   updateCulling(camera);
   followSun(focus);
 }
@@ -309,6 +350,7 @@ async function boot() {
   applySave(loadSave());
   applyTheme('day');
   buildWorld();
+  buildArmyBase();
   initMinimap();
   initDriveControls();
   loop();

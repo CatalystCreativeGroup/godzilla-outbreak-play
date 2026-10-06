@@ -73,6 +73,28 @@ const BUILDERS = {
     add(g, box(0.02, 0.03, 0.02), MAT.dark, 0, 0.07, 0.5);                      // front sight post
     muzzle(g, 0.86, 0.03);
   },
+  sniper(g) { // .50 cal anti-materiel rifle: long fluted barrel, big muzzle brake, bipod and a large scope
+    add(g, box(0.07, 0.16, 0.09), MAT.polymer, 0, -0.09, -0.04, 0.25);        // pistol grip
+    add(g, box(0.09, 0.12, 0.5), MAT.olive, 0, 0.02, 0.06);                    // receiver
+    add(g, box(0.07, 0.1, 0.3), MAT.olive, 0, 0.0, -0.36);                     // stock
+    add(g, box(0.075, 0.16, 0.05), MAT.polymer, 0, -0.01, -0.53);              // butt pad
+    add(g, box(0.06, 0.04, 0.14), MAT.polymer, 0, 0.09, -0.36);                // cheek rest
+    add(g, box(0.06, 0.16, 0.1), MAT.dark, 0, -0.1, 0.12);                     // magazine
+    add(g, tube(0.022, 0.02, 0.95), MAT.steel, 0, 0.04, 0.78);                 // barrel
+    for (let i = 0; i < 4; i++) add(g, tube(0.024, 0.024, 0.05), MAT.dark, 0, 0.04, 0.45 + i * 0.16); // fluting rings
+    add(g, box(0.09, 0.06, 0.12, 0.01), MAT.dark, 0, 0.04, 1.3);               // muzzle brake
+    for (const x of [-0.05, 0.05]) add(g, box(0.012, 0.04, 0.06), MAT.steel, x, 0.04, 1.3);
+    rail(g, -0.12, 0.3, 0.09);
+    add(g, tube(0.034, 0.034, 0.42), MAT.dark, 0, 0.15, 0.08);                 // scope tube
+    add(g, tube(0.034, 0.05, 0.1), MAT.dark, 0, 0.15, 0.33);                   // objective bell
+    add(g, tube(0.042, 0.034, 0.08), MAT.dark, 0, 0.15, -0.17);                // eyepiece
+    add(g, new THREE.CircleGeometry(0.046, 18), MAT.glass, 0, 0.15, 0.381);
+    add(g, box(0.03, 0.04, 0.03), MAT.dark, 0, 0.2, 0.08);                     // turret
+    add(g, box(0.06, 0.04, 0.03), MAT.dark, 0, 0.11, 0.0);                     // rings
+    add(g, box(0.06, 0.04, 0.03), MAT.dark, 0, 0.11, 0.18);
+    for (const x of [-0.04, 0.04]) add(g, box(0.014, 0.22, 0.014), MAT.steel, x, -0.08, 0.5, 0.5); // bipod legs (folded forward)
+    muzzle(g, 1.37, 0.04);
+  },
   shotgun(g) { // pump-action with wood furniture
     add(g, box(0.06, 0.14, 0.08), MAT.wood, 0, -0.07, -0.02, 0.35);
     add(g, box(0.07, 0.09, 0.3), MAT.steel, 0, 0.02, 0.1);

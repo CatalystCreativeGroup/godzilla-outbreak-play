@@ -77,7 +77,7 @@ export function updateMinimap(dt = 0.016) {
   if (canvas.clientWidth && Math.abs(canvas.width - canvas.clientWidth * Math.min(window.devicePixelRatio || 1, 2)) > 2) resize();
   const W = canvas.width, H = canvas.height, px = W / (big ? 600 : 150);
   ctx.clearRect(0, 0, W, H);
-  const radius = big ? WORLD + 40 : (P.vehicle?.type === 'jet' ? 220 : P.vehicle ? 150 : 100);
+  const radius = big ? WORLD + 40 : (P.vehicle && ['jet', 'heli', 'ship', 'sub'].includes(P.vehicle.t.kind) ? 240 : P.vehicle ? 150 : 100);
   const scale = (Math.min(W, H) / 2) / radius;
   if (big) lastScale = scale;
   const cx = W / 2, cy = H / 2;
@@ -104,7 +104,7 @@ export function updateMinimap(dt = 0.016) {
     if (v.dead || v.occupied) continue;
     const p = toScreen(v.pos.x, v.pos.z);
     if (!inView(p)) continue;
-    ctx.fillStyle = v.type === 'jet' ? '#9fd3ff' : v.type === 'tank' ? '#b8c46a' : '#ffffff';
+    ctx.fillStyle = { jet: '#9fd3ff', blueangel: '#5a8cff', heli: '#c8e86a', tank: '#b8c46a', missile: '#e8b86a', carrier: '#d0d4d8', sub: '#40484f' }[v.type] || '#ffffff';
     ctx.fillRect(p[0] - 2.5 * px, p[1] - 2.5 * px, 5 * px, 5 * px);
   }
   for (const e of world.enemies) if (e.alive) { const p = toScreen(e.pos.x, e.pos.z); if (inView(p)) dot(p, 2 * px, '#ff4d4d'); }

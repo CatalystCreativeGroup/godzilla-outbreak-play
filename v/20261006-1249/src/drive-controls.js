@@ -43,7 +43,7 @@ export function initDriveControls() {
 
 /* Show the wheel and pedals (car/tank) or hide them (on foot, jet). */
 export function showDriveControls(type) {
-  const on = type === 'car' || type === 'tank';
+  const on = type === 'wheel' || type === 'car' || type === 'tank';
   $('drive').hidden = !on;
   $('stick-zone').hidden = on;
   window.dispatchEvent(new Event('controls-changed'));

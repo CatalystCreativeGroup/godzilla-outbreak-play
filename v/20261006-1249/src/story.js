@@ -187,7 +187,7 @@ function openHq() {
 /* True once Joseph reaches the HQ: time for the boss. */
 export function reachedHq() {
   if (!story || story.stage !== 'hq') return false;
-  if (flatDist(story.hq, P.pos) >= (P.vehicle?.type === 'jet' ? 60 : 32)) return false;
+  if (flatDist(story.hq, P.pos) >= (P.vehicle && ['jet', 'heli'].includes(P.vehicle.t.kind) ? 60 : 32)) return false;
   story.stage = 'boss';
   scene.remove(story.hqBeam);
   world.banner?.(story.script.hq[1], 2600);

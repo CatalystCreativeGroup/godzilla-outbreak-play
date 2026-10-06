@@ -18,7 +18,7 @@ export const LEVELS = [
   { name: 'SWAMP THING', district: 'residential', theme: 'golden', mission: { type: 'rescue', count: 3 }, monsters: ['lizard', 'spitter'], roamers: 10,
     boss: { model: 'swamp', name: 'SWAMP GODZILLA', health: 460, size: 1.2, element: 'swamp', special: 'summon' } },
   { name: 'ROOFTOP RESCUE', district: 'residential', theme: 'day', mission: { type: 'rooftop', count: 4 }, monsters: ['lizard', 'jumper', 'spitter'], roamers: 10,
-    boss: { model: 'ice', name: 'ICE GODZILLA', health: 520, size: 1.2, element: 'ice', special: 'frost' }, unlocks: ['bazooka'] },
+    boss: { model: 'ice', name: 'ICE GODZILLA', health: 520, size: 1.2, element: 'ice', special: 'frost' }, unlocks: ['bazooka', 'sniper'] },
   { name: 'HARBOR HOSTAGES', district: 'harbor', theme: 'harbor', mission: { type: 'rescue', count: 4 }, monsters: ['lizard', 'spitter', 'brute'], roamers: 10,
     boss: { model: 'godzilla', name: 'ADULT GODZILLA', health: 600, size: 1.7, tint: 0x7fa9d6, element: 'water', special: 'breath' }, unlocks: ['lightning'], reward: 'WATER ARMOR' },
   { name: 'TANK BATTLE', district: 'military', theme: 'golden', mission: { type: 'tank', count: 8 }, monsters: ['lizard', 'bomber'], roamers: 8,

@@ -49,6 +49,7 @@ export const sfx = {
   blaster: limited('blaster', 0.05, () => tone(980, 0.07, 'square', 0.04, 520)),
   rifle: limited('rifle', 0.06, () => { noise(0.05, 0.12, 3000, 800); tone(160, 0.04, 'square', 0.04); }),
   shotgun: () => { noise(0.25, 0.4, 2200, 200); tone(90, 0.15, 'sine', 0.25, 40); },
+  sniper: () => { noise(0.5, 0.55, 2600, 120); tone(70, 0.35, 'sine', 0.4, 35); },
   bazooka: () => { noise(0.4, 0.25, 900, 300); tone(200, 0.3, 'sawtooth', 0.06, 80); },
   lightning: limited('lightning', 0.1, () => { noise(0.2, 0.25, 6000, 1500); tone(1400, 0.15, 'sawtooth', 0.05, 300); }),
   freeze: limited('freeze', 0.08, () => tone(1800, 0.08, 'sine', 0.04, 2600)),

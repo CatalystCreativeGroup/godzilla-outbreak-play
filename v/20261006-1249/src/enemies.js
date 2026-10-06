@@ -7,7 +7,7 @@ import { spit } from './weapons.js';
 import { maybeDrop } from './loot.js';
 import { sfx } from './audio.js';
 import { sparks, popWord, smoke, fireball, shake } from './fx.js';
-import { V3, rnd, world, P, flatDist, angleTo, turnToward } from './world.js';
+import { V3, rnd, world, P, flatDist, angleTo, turnToward , loadout } from './world.js';
 
 const TYPES = {
   lizard:  { hp: () => GAME.monsters.lizardHp,  speed: 1,    size: 1,   tint: null,     damage: 1, reach: 1.6, radius: 0.9 },
@@ -79,7 +79,8 @@ function updateOne(e, dt) {
     if (e.dying <= 0) { disposeModel(e.model); e.removed = true; }
     return;
   }
-  const farAway = flatDist(e.pos, P.pos) > 95;
+  // monsters far away sleep; looking through the sniper scope wakes them from further off
+  const farAway = flatDist(e.pos, P.pos) > (P.ads && loadout.current === 'sniper' ? 160 : 95);
   e.model.root.visible = !farAway && inView(e.pos, 2.5 * e.t.size);
   if (farAway) return; // sleep when nobody is near (saves the iPad's battery)
 
